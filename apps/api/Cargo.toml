@@ -1,0 +1,40 @@
+[package]
+name = "api"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+# Axum
+axum = "0.8"
+tokio = { version = "1", features = ["full"] }
+async-trait = "0.1.89"
+
+# JSON
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# Env
+dotenvy = "0.15"
+
+# Error ergonimisi
+anyhow = "1"
+
+# Postgres client + query
+sqlx = { version = "0.8", features = ["runtime-tokio", "postgres", "macros", "uuid", "chrono"] }
+
+# UUID/DateTime
+uuid = { version = "1", features = ["v4", "serde"] }
+chrono = { version = "0.4", features = ["serde"] }
+
+# Argon2
+argon2 = "0.5"
+rand = "0.8"
+
+# SHA256
+sha2 = "0.10"
+hex = "0.4"
+
+# JWT
+jsonwebtoken = { version = "10", features = ["rust_crypto"] }
+
+
