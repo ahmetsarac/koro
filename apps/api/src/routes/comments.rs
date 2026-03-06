@@ -1,8 +1,8 @@
 use axum::{
+    Json,
     extract::{Path, State},
     http::StatusCode,
     response::IntoResponse,
-    Json,
 };
 use serde::{Deserialize, Serialize};
 
@@ -126,7 +126,7 @@ pub async fn create_comment(
         req.body
     )
     .fetch_one(&state.db)
-    .await    
+    .await
     {
         Ok(r) => r,
         Err(e) => {

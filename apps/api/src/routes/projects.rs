@@ -1,8 +1,8 @@
 use axum::{
+    Json,
     extract::{Path, State},
     http::StatusCode,
     response::IntoResponse,
-    Json,
 };
 use serde::{Deserialize, Serialize};
 
@@ -28,7 +28,6 @@ pub async fn create_project(
     AuthUser(user_id): AuthUser,
     Json(req): Json<CreateProjectRequest>,
 ) -> impl IntoResponse {
-
     // project key normalize
     let project_key = req.project_key.to_uppercase();
 
@@ -140,20 +139,19 @@ pub async fn list_project_members(
     AuthUser(user_id): AuthUser,
 ) -> impl IntoResponse {
     // org resolve
-    let org_id = match sqlx::query_scalar::<_, uuid::Uuid>(
-        "SELECT id FROM organizations WHERE slug = $1",
-    )
-    .bind(&org_slug)
-    .fetch_optional(&state.db)
-    .await
-    {
-        Ok(Some(id)) => id,
-        Ok(None) => return StatusCode::NOT_FOUND.into_response(),
-        Err(e) => {
-            eprintln!("list_project_members org resolve error: {e:?}");
-            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
-        }
-    };
+    let org_id =
+        match sqlx::query_scalar::<_, uuid::Uuid>("SELECT id FROM organizations WHERE slug = $1")
+            .bind(&org_slug)
+            .fetch_optional(&state.db)
+            .await
+        {
+            Ok(Some(id)) => id,
+            Ok(None) => return StatusCode::NOT_FOUND.into_response(),
+            Err(e) => {
+                eprintln!("list_project_members org resolve error: {e:?}");
+                return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+            }
+        };
 
     // project resolve
     let project_id = match sqlx::query_scalar::<_, uuid::Uuid>(
@@ -212,8 +210,7 @@ pub async fn list_project_members(
             eprintln!("list_project_members query error: {e:?}");
             return StatusCode::INTERNAL_SERVER_ERROR.into_response();
         }
-    };    
-
+    };
 
     let items = rows
         .into_iter()
@@ -222,8 +219,8 @@ pub async fn list_project_members(
             name: r.name,
             email: r.email,
             project_role: r.project_role,
-    })
-    .collect();
+        })
+        .collect();
 
     (StatusCode::OK, Json(ListProjectMembersResponse { items })).into_response()
 }

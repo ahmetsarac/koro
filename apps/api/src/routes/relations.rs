@@ -1,8 +1,8 @@
 use axum::{
+    Json,
     extract::{Path, State},
     http::StatusCode,
     response::IntoResponse,
-    Json,
 };
 use serde::{Deserialize, Serialize};
 
@@ -175,12 +175,18 @@ pub async fn create_relation(
         eprintln!("relation_added event insert error: {e:?}");
     }
 
-    (StatusCode::CREATED, Json(CreateRelationResponse { relation_id: rec.id })).into_response()
+    (
+        StatusCode::CREATED,
+        Json(CreateRelationResponse {
+            relation_id: rec.id,
+        }),
+    )
+        .into_response()
 }
 
 #[derive(Serialize)]
 pub struct RelationItem {
-    pub issue_key: String,   // e.g. APP-2
+    pub issue_key: String, // e.g. APP-2
     pub title: String,
 }
 
@@ -440,7 +446,6 @@ pub async fn delete_relation(
             return StatusCode::INTERNAL_SERVER_ERROR.into_response();
         }
     };
-
 
     if res.rows_affected() == 0 {
         return StatusCode::NOT_FOUND.into_response();

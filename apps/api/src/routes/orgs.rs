@@ -1,12 +1,7 @@
-use axum::{
-    extract::State,
-    http::{StatusCode}, 
-    response::IntoResponse, 
-    Json, 
-};
+use axum::{Json, extract::State, http::StatusCode, response::IntoResponse};
 use serde::{Deserialize, Serialize};
 
-use crate::{state::AppState, auth_user::AuthUser};
+use crate::{auth_user::AuthUser, state::AppState};
 
 #[derive(Deserialize)]
 pub struct CreateOrgRequest {
@@ -26,7 +21,6 @@ pub async fn create_org(
     AuthUser(user_id): AuthUser,
     Json(req): Json<CreateOrgRequest>,
 ) -> impl IntoResponse {
-   
     // POLICY: şu an güvenli başlangıç -> sadece platform_admin
     // Self-serve'e geçince burayı gevşeteceğiz (tek yerden).
     let platform_role = match sqlx::query_scalar::<_, String>(
@@ -64,7 +58,8 @@ pub async fn create_org(
         user_id
     )
     .fetch_one(&mut *tx)
-    .await {
+    .await
+    {
         Ok(r) => r,
         Err(e) => {
             eprintln!("create_org insert error {e:?}");

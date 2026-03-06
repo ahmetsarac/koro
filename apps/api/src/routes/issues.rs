@@ -1,8 +1,8 @@
 use axum::{
-    extract::{Path, State, Query},
+    Json,
+    extract::{Path, Query, State},
     http::StatusCode,
     response::IntoResponse,
-    Json,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -215,21 +215,20 @@ pub async fn list_issues(
     }
 
     // project_key lazım (display_key için)
-    let project_key = match sqlx::query_scalar::<_, String>(
-        "SELECT project_key FROM projects WHERE id = $1",
-    )
-    .bind(project_id)
-    .fetch_optional(&state.db)
-    .await
-    {
-        Ok(Some(k)) => k,
-        Ok(None) => return StatusCode::NOT_FOUND.into_response(),
-        Err(e) => {
-            eprintln!("list_issues project_key error: {e:?}");
-            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
-        }
-    };
-    
+    let project_key =
+        match sqlx::query_scalar::<_, String>("SELECT project_key FROM projects WHERE id = $1")
+            .bind(project_id)
+            .fetch_optional(&state.db)
+            .await
+        {
+            Ok(Some(k)) => k,
+            Ok(None) => return StatusCode::NOT_FOUND.into_response(),
+            Err(e) => {
+                eprintln!("list_issues project_key error: {e:?}");
+                return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+            }
+        };
+
     let status_filter: Option<String> = q.get("status").cloned();
 
     let q_filter: Option<String> = q.get("q").cloned();
@@ -285,7 +284,7 @@ pub async fn list_issues(
             eprintln!("list_issues query error: {e:?}");
             return StatusCode::INTERNAL_SERVER_ERROR.into_response();
         }
-    };   
+    };
 
     let items = rows
         .into_iter()
@@ -295,7 +294,7 @@ pub async fn list_issues(
             title: r.title,
             status: r.status,
         })
-    .collect();
+        .collect();
 
     (StatusCode::OK, Json(ListIssuesResponse { items })).into_response()
 }
@@ -325,12 +324,9 @@ pub async fn update_issue_status(
     }
 
     // issue -> project_id çek
-    let issue_row = match sqlx::query!(
-        r#"SELECT project_id FROM issues WHERE id = $1"#,
-        issue_id
-    )
-    .fetch_optional(&state.db)
-    .await
+    let issue_row = match sqlx::query!(r#"SELECT project_id FROM issues WHERE id = $1"#, issue_id)
+        .fetch_optional(&state.db)
+        .await
     {
         Ok(Some(r)) => r,
         Ok(None) => return StatusCode::NOT_FOUND.into_response(),
@@ -385,7 +381,6 @@ pub async fn update_issue_status(
         .into_response()
 }
 
-
 #[derive(serde::Serialize)]
 pub struct BoardResponse {
     pub columns: BTreeMap<String, Vec<IssueListItem>>,
@@ -418,20 +413,19 @@ pub async fn get_board(
     }
 
     // project_key
-    let project_key = match sqlx::query_scalar::<_, String>(
-        "SELECT project_key FROM projects WHERE id = $1",
-    )
-    .bind(project_id)
-    .fetch_optional(&state.db)
-    .await
-    {
-        Ok(Some(k)) => k,
-        Ok(None) => return StatusCode::NOT_FOUND.into_response(),
-        Err(e) => {
-            eprintln!("get_board project_key error: {e:?}");
-            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
-        }
-    };
+    let project_key =
+        match sqlx::query_scalar::<_, String>("SELECT project_key FROM projects WHERE id = $1")
+            .bind(project_id)
+            .fetch_optional(&state.db)
+            .await
+        {
+            Ok(Some(k)) => k,
+            Ok(None) => return StatusCode::NOT_FOUND.into_response(),
+            Err(e) => {
+                eprintln!("get_board project_key error: {e:?}");
+                return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+            }
+        };
 
     // tüm issue'ları çek
     let rows = match sqlx::query!(
@@ -672,20 +666,19 @@ pub async fn assign_issue(
     };
 
     // org_id
-    let org_id = match sqlx::query_scalar::<_, uuid::Uuid>(
-        "SELECT id FROM organizations WHERE slug = $1",
-    )
-    .bind(&org_slug)
-    .fetch_optional(&state.db)
-    .await
-    {
-        Ok(Some(id)) => id,
-        Ok(None) => return StatusCode::NOT_FOUND.into_response(),
-        Err(e) => {
-            eprintln!("assign_issue org resolve error: {e:?}");
-            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
-        }
-    };
+    let org_id =
+        match sqlx::query_scalar::<_, uuid::Uuid>("SELECT id FROM organizations WHERE slug = $1")
+            .bind(&org_slug)
+            .fetch_optional(&state.db)
+            .await
+        {
+            Ok(Some(id)) => id,
+            Ok(None) => return StatusCode::NOT_FOUND.into_response(),
+            Err(e) => {
+                eprintln!("assign_issue org resolve error: {e:?}");
+                return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+            }
+        };
 
     // issue_id + project_id
     let issue_row = match sqlx::query!(
@@ -758,20 +751,19 @@ pub async fn assign_me(
         None => return (StatusCode::BAD_REQUEST, "invalid issue key").into_response(),
     };
 
-    let org_id = match sqlx::query_scalar::<_, uuid::Uuid>(
-        "SELECT id FROM organizations WHERE slug = $1",
-    )
-    .bind(&org_slug)
-    .fetch_optional(&state.db)
-    .await
-    {
-        Ok(Some(id)) => id,
-        Ok(None) => return StatusCode::NOT_FOUND.into_response(),
-        Err(e) => {
-            eprintln!("assign_me org resolve error: {e:?}");
-            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
-        }
-    };
+    let org_id =
+        match sqlx::query_scalar::<_, uuid::Uuid>("SELECT id FROM organizations WHERE slug = $1")
+            .bind(&org_slug)
+            .fetch_optional(&state.db)
+            .await
+        {
+            Ok(Some(id)) => id,
+            Ok(None) => return StatusCode::NOT_FOUND.into_response(),
+            Err(e) => {
+                eprintln!("assign_me org resolve error: {e:?}");
+                return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+            }
+        };
 
     let issue_row = match sqlx::query!(
         r#"
@@ -860,20 +852,19 @@ pub async fn unassign_issue(
         None => return (StatusCode::BAD_REQUEST, "invalid issue key").into_response(),
     };
 
-    let org_id = match sqlx::query_scalar::<_, uuid::Uuid>(
-        "SELECT id FROM organizations WHERE slug = $1",
-    )
-    .bind(&org_slug)
-    .fetch_optional(&state.db)
-    .await
-    {
-        Ok(Some(id)) => id,
-        Ok(None) => return StatusCode::NOT_FOUND.into_response(),
-        Err(e) => {
-            eprintln!("unassign org resolve error: {e:?}");
-            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
-        }
-    };
+    let org_id =
+        match sqlx::query_scalar::<_, uuid::Uuid>("SELECT id FROM organizations WHERE slug = $1")
+            .bind(&org_slug)
+            .fetch_optional(&state.db)
+            .await
+        {
+            Ok(Some(id)) => id,
+            Ok(None) => return StatusCode::NOT_FOUND.into_response(),
+            Err(e) => {
+                eprintln!("unassign org resolve error: {e:?}");
+                return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+            }
+        };
 
     let issue_id = match sqlx::query_scalar::<_, uuid::Uuid>(
         r#"

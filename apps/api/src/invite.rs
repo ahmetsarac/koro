@@ -1,4 +1,4 @@
-use rand::{rngs::OsRng, RngCore};
+use rand::{RngCore, rngs::OsRng};
 use sha2::{Digest, Sha256};
 
 pub fn generate_token() -> String {

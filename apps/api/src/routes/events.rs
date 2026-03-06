@@ -1,8 +1,8 @@
 use axum::{
+    Json,
     extract::{Path, State},
     http::StatusCode,
     response::IntoResponse,
-    Json,
 };
 use serde::Serialize;
 
@@ -46,20 +46,19 @@ pub async fn list_issue_events(
     };
 
     // org resolve
-    let org_id = match sqlx::query_scalar::<_, uuid::Uuid>(
-        "SELECT id FROM organizations WHERE slug = $1",
-    )
-    .bind(&org_slug)
-    .fetch_optional(&state.db)
-    .await
-    {
-        Ok(Some(id)) => id,
-        Ok(None) => return StatusCode::NOT_FOUND.into_response(),
-        Err(e) => {
-            eprintln!("list_issue_events org resolve error: {e:?}");
-            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
-        }
-    };
+    let org_id =
+        match sqlx::query_scalar::<_, uuid::Uuid>("SELECT id FROM organizations WHERE slug = $1")
+            .bind(&org_slug)
+            .fetch_optional(&state.db)
+            .await
+        {
+            Ok(Some(id)) => id,
+            Ok(None) => return StatusCode::NOT_FOUND.into_response(),
+            Err(e) => {
+                eprintln!("list_issue_events org resolve error: {e:?}");
+                return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+            }
+        };
 
     // issue resolve + project_id (auth için)
     let issue_row = match sqlx::query!(
@@ -141,13 +140,29 @@ pub async fn list_issue_events(
             event_type: r.event_type,
             created_at: r.created_at,
             actor: match (r.actor_id, r.actor_name, r.actor_email) {
-                (Some(aid), Some(name), Some(email)) => Some(EventActor { user_id: aid, name, email }),
-                (Some(aid), Some(name), None) => Some(EventActor { user_id: aid, name, email: "".to_string() }),
-                (Some(aid), None, Some(email)) => Some(EventActor { user_id: aid, name: "Unknown".to_string(), email }),
-                (Some(aid), None, None) => Some(EventActor { user_id: aid, name: "Unknown".to_string(), email: "".to_string() }),
+                (Some(aid), Some(name), Some(email)) => Some(EventActor {
+                    user_id: aid,
+                    name,
+                    email,
+                }),
+                (Some(aid), Some(name), None) => Some(EventActor {
+                    user_id: aid,
+                    name,
+                    email: "".to_string(),
+                }),
+                (Some(aid), None, Some(email)) => Some(EventActor {
+                    user_id: aid,
+                    name: "Unknown".to_string(),
+                    email,
+                }),
+                (Some(aid), None, None) => Some(EventActor {
+                    user_id: aid,
+                    name: "Unknown".to_string(),
+                    email: "".to_string(),
+                }),
                 (None, _, _) => None,
             },
-            payload: r.payload,        
+            payload: r.payload,
         })
         .collect();
 

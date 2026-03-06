@@ -1,9 +1,4 @@
-use axum::{
-    extract::State,
-    http::StatusCode,
-    response::IntoResponse,
-    Json, 
-};
+use axum::{Json, extract::State, http::StatusCode, response::IntoResponse};
 use serde::{Deserialize, Serialize};
 
 use crate::{auth, state::AppState};
@@ -21,7 +16,6 @@ pub struct SetupResponse {
     pub email: String,
     pub platform_role: &'static str,
 }
-
 
 pub async fn setup(
     State(state): State<AppState>,

@@ -1,18 +1,17 @@
-mod auth_user;
-mod jwt;
-mod http;
 mod auth;
+mod auth_user;
 mod db;
+mod http;
+mod jwt;
 mod state;
 use state::AppState;
-mod routes;
 mod invite;
-
+mod routes;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     dotenvy::from_filename("../../.env").ok(); // repo root
-    dotenvy::dotenv().ok();                    // apps/api/.env
+    dotenvy::dotenv().ok(); // apps/api/.env
 
     let database_url =
         std::env::var("DATABASE_URL").expect("DATABASE_URL is not set (check root .env)");

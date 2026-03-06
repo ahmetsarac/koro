@@ -2,9 +2,9 @@ use std::future::Future;
 
 use axum::{
     extract::FromRequestParts,
+    http::StatusCode,
     http::request::Parts,
     response::{IntoResponse, Response},
-    http::StatusCode,
 };
 use uuid::Uuid;
 
@@ -38,13 +38,15 @@ where
                 .strip_prefix("Bearer ")
                 .ok_or_else(|| StatusCode::UNAUTHORIZED.into_response())?;
 
-println!("JWT_SECRET set? {}", std::env::var("JWT_SECRET").is_ok());
-
             let secret = std::env::var("JWT_SECRET")
                 .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR.into_response())?;
 
             let claims = jwt::verify(token, &secret)
                 .map_err(|_| StatusCode::UNAUTHORIZED.into_response())?;
+
+            if claims.token_type != jwt::TokenType::Access {
+                return Err(StatusCode::UNAUTHORIZED.into_response());
+            }
 
             let user_id = Uuid::parse_str(&claims.sub)
                 .map_err(|_| StatusCode::UNAUTHORIZED.into_response())?;

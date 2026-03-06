@@ -6,6 +6,6 @@ pub fn user_id_from_headers(headers: &HeaderMap) -> Result<uuid::Uuid, StatusCod
         .ok_or(StatusCode::UNAUTHORIZED)?
         .to_str()
         .map_err(|_| StatusCode::UNAUTHORIZED)?;
-    
+
     uuid::Uuid::parse_str(v).map_err(|_| StatusCode::UNAUTHORIZED)
 }

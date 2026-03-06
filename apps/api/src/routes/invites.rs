@@ -1,11 +1,11 @@
-use chrono::{Duration, Utc};
 use crate::{http::user_id_from_headers, invite};
+use chrono::{Duration, Utc};
 
 use axum::{
+    Json,
     extract::{Path, State},
     http::{HeaderMap, StatusCode},
     response::IntoResponse,
-    Json,
 };
 use serde::{Deserialize, Serialize};
 
@@ -40,18 +40,18 @@ pub async fn create_invite(
     WHERE org_id = $1 AND user_id = $2 AND org_role = 'org_admin'
     "#,
     )
-        .bind(org_id)
-        .bind(user_id)
-        .fetch_optional(&state.db)
-        .await
-        {
-            Ok(Some(_)) => true,
-            Ok(None) => false,
-            Err(e) => {
-                eprintln!("create_invite admin check error: {e:?}");
-                return StatusCode::INTERNAL_SERVER_ERROR.into_response();
-            }
-        };
+    .bind(org_id)
+    .bind(user_id)
+    .fetch_optional(&state.db)
+    .await
+    {
+        Ok(Some(_)) => true,
+        Ok(None) => false,
+        Err(e) => {
+            eprintln!("create_invite admin check error: {e:?}");
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
+    };
 
     if !is_admin {
         return StatusCode::FORBIDDEN.into_response();
@@ -67,15 +67,15 @@ pub async fn create_invite(
     INSERT INTO user_invites (org_id, email, invited_role, token_hash, expires_at, invited_by)
     VALUES ($1, $2, $3, $4, $5, $6)
     "#,
-    org_id,
-    req.email,
-    req.role,
-    token_hash,
-    expires_at,
-    user_id
+        org_id,
+        req.email,
+        req.role,
+        token_hash,
+        expires_at,
+        user_id
     )
-        .execute(&state.db)
-        .await;
+    .execute(&state.db)
+    .await;
 
     if let Err(e) = insert {
         eprintln!("create_invite insert error: {e:?}");
@@ -84,7 +84,11 @@ pub async fn create_invite(
 
     let invite_url = format!("http://localhost:3001/invites/{}", raw_token);
 
-    (StatusCode::CREATED, Json(CreateInviteResponse { invite_url })).into_response()
+    (
+        StatusCode::CREATED,
+        Json(CreateInviteResponse { invite_url }),
+    )
+        .into_response()
 }
 
 #[derive(Serialize)]
