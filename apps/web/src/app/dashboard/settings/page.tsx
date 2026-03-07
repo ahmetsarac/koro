@@ -1,4 +1,4 @@
-export default function DashboardSettingsPage() {
+export default function SettingsPage() {
   return (
     <section className="max-w-2xl rounded-[2rem] border border-zinc-800 bg-zinc-900 p-6">
       <p className="text-sm uppercase tracking-[0.25em] text-zinc-500">

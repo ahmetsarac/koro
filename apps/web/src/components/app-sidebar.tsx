@@ -51,7 +51,7 @@ const data = {
   navMain: [
     {
       title: "My Issues",
-      url: "#",
+      url: "/dashboard/my-issues",
       icon: (
         <Crosshair
         />
@@ -59,7 +59,7 @@ const data = {
     },
     {
       title: "Projects",
-      url: "#",
+      url: "/dashboard/projects",
       icon: (
         <Boxes
         />
@@ -67,7 +67,7 @@ const data = {
     },
     {
       title: "Activity",
-      url: "#",
+      url: "/dashboard/activity",
       icon: (
         <BookOpenIcon
         />
@@ -75,7 +75,7 @@ const data = {
     },
     {
       title: "Settings",
-      url: "#",
+      url: "/dashboard/settings",
       icon: (
         <Settings
         />
