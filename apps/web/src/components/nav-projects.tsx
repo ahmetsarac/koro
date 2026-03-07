@@ -1,85 +1,65 @@
 "use client"
 
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
+import Link from "next/link"
+import { usePathname } from "next/navigation"
+import { PlusIcon } from "lucide-react"
+
 import {
   SidebarGroup,
+  SidebarGroupAction,
   SidebarGroupLabel,
   SidebarMenu,
-  SidebarMenuAction,
+  SidebarMenuBadge,
   SidebarMenuButton,
   SidebarMenuItem,
-  useSidebar,
 } from "@/components/ui/sidebar"
-import { MoreHorizontalIcon, FolderIcon, ArrowRightIcon, Trash2Icon } from "lucide-react"
 
 export function NavProjects({
   projects,
 }: {
   projects: {
     name: string
+    key: string
     url: string
     icon: React.ReactNode
+    openIssueCount: number
   }[]
 }) {
-  const { isMobile } = useSidebar()
+  const pathname = usePathname()
+
+  function isRouteActive(url: string) {
+    const route = url.split("#")[0]
+    return pathname === route || pathname.startsWith(`${route}/`)
+  }
 
   return (
     <SidebarGroup className="group-data-[collapsible=icon]:hidden">
+      <SidebarGroupAction
+        aria-label="Create project"
+        title="Create project"
+        type="button"
+        className="rounded-sm cursor-pointer"
+      >
+        <PlusIcon />
+      </SidebarGroupAction>
       <SidebarGroupLabel>Projects</SidebarGroupLabel>
       <SidebarMenu>
         {projects.map((item) => (
           <SidebarMenuItem key={item.name}>
-            <SidebarMenuButton asChild>
-              <a href={item.url}>
+            <SidebarMenuButton asChild isActive={isRouteActive(item.url)} className="h-auto py-2">
+              <Link href={item.url}>
                 {item.icon}
-                <span>{item.name}</span>
-              </a>
+                <div className="flex min-w-0 flex-1 flex-col text-left">
+                  <span className="truncate font-medium">{item.name}</span>
+                  <span className="truncate text-[11px] text-sidebar-foreground/60">
+                    {item.key}
+                  </span>
+                </div>
+                <SidebarMenuBadge>{item.openIssueCount}</SidebarMenuBadge>
+              </Link>
             </SidebarMenuButton>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <SidebarMenuAction
-                  showOnHover
-                  className="aria-expanded:bg-muted"
-                >
-                  <MoreHorizontalIcon
-                  />
-                  <span className="sr-only">More</span>
-                </SidebarMenuAction>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent
-                className="w-48 rounded-lg"
-                side={isMobile ? "bottom" : "right"}
-                align={isMobile ? "end" : "start"}
-              >
-                <DropdownMenuItem>
-                  <FolderIcon className="text-muted-foreground" />
-                  <span>View Project</span>
-                </DropdownMenuItem>
-                <DropdownMenuItem>
-                  <ArrowRightIcon className="text-muted-foreground" />
-                  <span>Share Project</span>
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem>
-                  <Trash2Icon className="text-muted-foreground" />
-                  <span>Delete Project</span>
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
           </SidebarMenuItem>
         ))}
-        <SidebarMenuItem>
-          <SidebarMenuButton className="text-sidebar-foreground/70">
-            <MoreHorizontalIcon className="text-sidebar-foreground/70" />
-            <span>More</span>
-          </SidebarMenuButton>
-        </SidebarMenuItem>
       </SidebarMenu>
     </SidebarGroup>
   )

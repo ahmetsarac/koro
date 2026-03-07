@@ -13,7 +13,7 @@ import {
   SidebarHeader,
   SidebarRail,
 } from "@/components/ui/sidebar"
-import { GalleryVerticalEndIcon, AudioLinesIcon, TerminalIcon, TerminalSquareIcon, BotIcon, BookOpenIcon, Settings2Icon, FrameIcon, PieChartIcon, MapIcon, Layers, Crosshair, Boxes, Settings } from "lucide-react"
+import { GalleryVerticalEndIcon, AudioLinesIcon, TerminalIcon, TerminalSquareIcon, BotIcon, BookOpenIcon, Settings2Icon, FrameIcon, PieChartIcon, MapIcon, Layers, Crosshair, Boxes, Settings, BlocksIcon, KeyRoundIcon, WorkflowIcon } from "lucide-react"
 
 // This is sample data.
 const data = {
@@ -84,28 +84,25 @@ const data = {
   ],
   projects: [
     {
-      name: "Design Engineering",
-      url: "#",
-      icon: (
-        <FrameIcon
-        />
-      ),
+      name: "Core Platform",
+      key: "KORO",
+      url: "/dashboard/projects#koro",
+      icon: <BlocksIcon />,
+      openIssueCount: 24,
     },
     {
-      name: "Sales & Marketing",
-      url: "#",
-      icon: (
-        <PieChartIcon
-        />
-      ),
+      name: "Authentication",
+      key: "AUTH",
+      url: "/dashboard/projects#auth",
+      icon: <KeyRoundIcon />,
+      openIssueCount: 9,
     },
     {
-      name: "Travel",
-      url: "#",
-      icon: (
-        <MapIcon
-        />
-      ),
+      name: "Workflow Engine",
+      key: "FLOW",
+      url: "/dashboard/projects#flow",
+      icon: <WorkflowIcon />,
+      openIssueCount: 13,
     },
   ],
 }
