@@ -1,43 +1,55 @@
-const cards = [
-  {
-    title: "Auth Durumu",
-    body: "Bu alan access token middleware kontrolunden gecince render edilir.",
-  },
-  {
-    title: "Refresh Stratejisi",
-    body: "Access token biterse Next.js refresh token ile API refresh route'unu sadece gerektiğinde cagirir.",
-  },
-  {
-    title: "Route Koruma",
-    body: "Dashboard altindaki tum route'lar middleware ile ayni sekilde korunur.",
-  },
-];
+import { AppSidebar } from "@/components/app-sidebar"
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from "@/components/ui/breadcrumb"
+import { Separator } from "@/components/ui/separator"
+import {
+  SidebarInset,
+  SidebarProvider,
+  SidebarTrigger,
+} from "@/components/ui/sidebar"
 
-export default function DashboardPage() {
+export default function Page() {
   return (
-    <section className="space-y-6">
-      <div className="rounded-[2rem] border border-zinc-800 bg-gradient-to-br from-zinc-900 via-zinc-900 to-zinc-950 p-8">
-        <p className="text-sm uppercase tracking-[0.35em] text-zinc-500">
-          Secure area
-        </p>
-        <h2 className="mt-3 text-3xl font-semibold">Korumali dashboard</h2>
-        <p className="mt-3 max-w-2xl text-zinc-400">
-          Login sonrasi kullanici burada karsilanir. Route degisikliklerinde
-          token dogrulamasi Next.js middleware tarafinda yapilir.
-        </p>
-      </div>
-
-      <div className="grid gap-4 md:grid-cols-3">
-        {cards.map((card) => (
-          <article
-            key={card.title}
-            className="rounded-3xl border border-zinc-800 bg-zinc-900 p-5"
-          >
-            <h3 className="text-lg font-medium">{card.title}</h3>
-            <p className="mt-2 text-sm leading-6 text-zinc-400">{card.body}</p>
-          </article>
-        ))}
-      </div>
-    </section>
-  );
+    <SidebarProvider>
+      <AppSidebar />
+      <SidebarInset>
+        <header className="flex h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12">
+          <div className="flex items-center gap-2 px-4">
+            <SidebarTrigger className="-ml-1" />
+            <Separator
+              orientation="vertical"
+              className="mr-2 data-vertical:h-4 data-vertical:self-auto"
+            />
+            <Breadcrumb>
+              <BreadcrumbList>
+                <BreadcrumbItem className="hidden md:block">
+                  <BreadcrumbLink href="#">
+                    Build Your Application
+                  </BreadcrumbLink>
+                </BreadcrumbItem>
+                <BreadcrumbSeparator className="hidden md:block" />
+                <BreadcrumbItem>
+                  <BreadcrumbPage>Data Fetching</BreadcrumbPage>
+                </BreadcrumbItem>
+              </BreadcrumbList>
+            </Breadcrumb>
+          </div>
+        </header>
+        <div className="flex flex-1 flex-col gap-4 p-4 pt-0">
+          <div className="grid auto-rows-min gap-4 md:grid-cols-3">
+            <div className="aspect-video rounded-xl bg-muted/50" />
+            <div className="aspect-video rounded-xl bg-muted/50" />
+            <div className="aspect-video rounded-xl bg-muted/50" />
+          </div>
+          <div className="min-h-screen flex-1 rounded-xl bg-muted/50 md:min-h-min" />
+        </div>
+      </SidebarInset>
+    </SidebarProvider>
+  )
 }

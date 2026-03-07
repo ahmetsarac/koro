@@ -12,7 +12,6 @@ import {
 import { verifyJwt } from "@/lib/auth/jwt";
 
 function getJwtSecret() {
-  console.log(process.env);
   const secret = process.env.JWT_SECRET;
 
   if (!secret) {

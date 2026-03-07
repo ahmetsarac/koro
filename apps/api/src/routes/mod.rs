@@ -3,6 +3,8 @@ use axum::{
     Router,
     routing::{delete, get, patch, post},
 };
+use tower_http::trace::{TraceLayer, DefaultMakeSpan, DefaultOnResponse};
+use tracing::Level;
 
 mod auth;
 mod comments;
@@ -79,4 +81,8 @@ pub fn router(state: AppState) -> Router {
             get(events::list_issue_events),
         )
         .with_state(state)
-}
+        .layer(
+            TraceLayer::new_for_http()
+            .make_span_with(DefaultMakeSpan::new().level(Level::INFO))
+            .on_response(DefaultOnResponse::new().level(Level::INFO))
+        )}
