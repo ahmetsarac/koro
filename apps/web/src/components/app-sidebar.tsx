@@ -82,6 +82,7 @@ const data = {
       ),
     },
   ],
+  //projects: [],
   projects: [
     {
       name: "Core Platform",
