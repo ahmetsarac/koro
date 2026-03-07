@@ -1,4 +1,5 @@
 import { AppSidebar } from "@/components/app-sidebar"
+import { ThemeToggle } from "@/components/theme-toggle"
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -35,6 +36,9 @@ export default function DashboardLayout({children}: {children: React.ReactNode})
                 </BreadcrumbItem>
              </BreadcrumbList>
             </Breadcrumb>
+          </div>
+          <div className="ml-auto px-3">
+            <ThemeToggle />
           </div>
         </header>
         <main className="flex flex-1 flex-col gap-4 p-4 pt-0">

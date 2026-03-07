@@ -20,7 +20,9 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from "@/components/ui/sidebar"
-import { ChevronsUpDownIcon, SparklesIcon, BadgeCheckIcon, CreditCardIcon, BellIcon, LogOutIcon } from "lucide-react"
+import { ChevronsUpDownIcon, SparklesIcon, BadgeCheckIcon, CreditCardIcon, BellIcon, LogOutIcon, Loader2 } from "lucide-react"
+import { useState } from "react"
+import { useRouter } from "next/navigation"
 
 export function NavUser({
   user,
@@ -32,6 +34,23 @@ export function NavUser({
   }
 }) {
   const { isMobile } = useSidebar()
+  const [loading, setLoading] = useState(false);
+  const router = useRouter();
+
+  async function handleLogout() {
+    setLoading(true);
+
+    try {
+      await fetch("/api/auth/logout", {
+        method: "POST",
+      });
+
+      router.replace("/login");
+      router.refresh();
+    } finally {
+      setLoading(false);
+    }
+  }
 
   return (
     <SidebarMenu>
@@ -55,8 +74,8 @@ export function NavUser({
           </DropdownMenuTrigger>
           <DropdownMenuContent
             className="w-(--radix-dropdown-menu-trigger-width) min-w-56 rounded-lg"
-            side={isMobile ? "bottom" : "right"}
-            align="end"
+            side={"top"}
+            align="start"
             sideOffset={4}
           >
             <DropdownMenuLabel className="p-0 font-normal">
@@ -98,10 +117,11 @@ export function NavUser({
               </DropdownMenuItem>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
-            <DropdownMenuItem>
+            <DropdownMenuItem onClick={handleLogout}>
               <LogOutIcon
               />
               Log out
+              {loading ? <Loader2 className="ml-auto size-4 animate-spin" /> : null}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
