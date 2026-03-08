@@ -1,13 +1,6 @@
 import { AppSidebar } from "@/components/app-sidebar"
 import { ThemeToggle } from "@/components/theme-toggle"
-import {
-  Breadcrumb,
-  BreadcrumbItem,
-  BreadcrumbLink,
-  BreadcrumbList,
-  BreadcrumbPage,
-  BreadcrumbSeparator,
-} from "@/components/ui/breadcrumb"
+import { DashboardBreadcrumb } from "@/components/dashboard-breadcrumb"
 import { Separator } from "@/components/ui/separator"
 import {
   SidebarInset,
@@ -20,36 +13,21 @@ export default function DashboardLayout({children}: {children: React.ReactNode})
     <SidebarProvider>
       <AppSidebar />
       <SidebarInset>
-        <header className="flex h-16 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12">
-          <div className="flex items-center gap-2 px-4">
+        <header className="sticky top-0 z-20 flex h-12 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12 bg-background border-b">
+          <div className="flex items-center gap-2 px-6">
             <SidebarTrigger className="-ml-1" />
             <Separator
               orientation="vertical"
               className="mr-2 data-[orientation=vertical]:h-4 data-vertical:self-auto"
             />
-            <Breadcrumb>
-              <BreadcrumbList>
-                <BreadcrumbItem className="hidden md:block">
-                  <BreadcrumbPage>
-                    Dashboard
-                  </BreadcrumbPage>
-                </BreadcrumbItem>
-             </BreadcrumbList>
-            </Breadcrumb>
+            <DashboardBreadcrumb />
           </div>
           <div className="ml-auto px-3">
             <ThemeToggle />
           </div>
         </header>
-        <main className="flex flex-1 flex-col gap-4 p-4 pt-0">
-
-        {children}
-          <div className="grid auto-rows-min gap-4 md:grid-cols-3">
-            <div className="aspect-video rounded-xl bg-muted/50" />
-            <div className="aspect-video rounded-xl bg-muted/50" />
-            <div className="aspect-video rounded-xl bg-muted/50" />
-          </div>
-          <div className="min-h-[100vh] flex-1 rounded-xl bg-muted/50 md:min-h-min" />
+        <main className="flex flex-1 flex-col gap-6 px-6 py-2">
+          {children}
         </main>
       </SidebarInset>
     </SidebarProvider>
