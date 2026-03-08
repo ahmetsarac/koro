@@ -13,6 +13,7 @@ import { DataTableRowActions } from "./data-table-row-actions"
 export const columns: ColumnDef<Task>[] = [
   {
     id: "select",
+    size: 28,
     header: ({ table }) => (
       <Checkbox
         checked={
@@ -37,6 +38,7 @@ export const columns: ColumnDef<Task>[] = [
   },
   {
     accessorKey: "id",
+    size: 100,
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title="Task" />
     ),
@@ -46,6 +48,7 @@ export const columns: ColumnDef<Task>[] = [
   },
   {
     accessorKey: "title",
+    size: 450,
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title="Title" />
     ),
@@ -64,6 +67,7 @@ export const columns: ColumnDef<Task>[] = [
   },
   {
     accessorKey: "status",
+    size: 120,
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title="Status" />
     ),
@@ -91,6 +95,7 @@ export const columns: ColumnDef<Task>[] = [
   },
   {
     accessorKey: "priority",
+    size: 120,
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title="Priority" />
     ),
@@ -118,6 +123,7 @@ export const columns: ColumnDef<Task>[] = [
   },
   {
     id: "actions",
+    size: 40,
     cell: ({ row }) => <DataTableRowActions row={row} />,
   },
 ]
