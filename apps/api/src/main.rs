@@ -12,9 +12,8 @@ mod routes;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-
     tracing_subscriber::fmt::init();
-    
+
     dotenvy::from_filename("../../.env").ok(); // repo root
     dotenvy::dotenv().ok(); // apps/api/.env
 

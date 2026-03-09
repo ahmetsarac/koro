@@ -60,7 +60,9 @@ async fn main() -> anyhow::Result<()> {
         .with_context(|| format!("failed to insert demo task {}", task.id))?;
     }
 
-    tx.commit().await.context("failed to commit seed transaction")?;
+    tx.commit()
+        .await
+        .context("failed to commit seed transaction")?;
 
     println!("Seeded {} demo tasks into demo_tasks", tasks.len());
 
