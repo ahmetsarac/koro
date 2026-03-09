@@ -1,3 +1,5 @@
+import { getApiBaseUrl } from "@/lib/api/backend";
+
 export type AuthTokens = {
   access_token: string;
   refresh_token: string;
@@ -11,16 +13,6 @@ export class AuthApiError extends Error {
     super(message);
     this.name = "AuthApiError";
   }
-}
-
-function getApiBaseUrl() {
-  const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL;
-
-  if (!apiBaseUrl) {
-    throw new Error("NEXT_PUBLIC_API_URL is not configured.");
-  }
-
-  return apiBaseUrl.replace(/\/$/, "");
 }
 
 async function requestAuthTokens(
