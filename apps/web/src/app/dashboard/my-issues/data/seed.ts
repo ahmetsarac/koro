@@ -1,20 +1,25 @@
-import fs from "fs"
-import path from "path"
+import fs from "node:fs"
 import { faker } from "@faker-js/faker"
 
-import { labels, priorities, statuses } from "./data"
+const TASK_COUNT = 5000
+const TASK_ID_START = 1000
+const STATUSES = ["backlog", "todo", "in progress", "done", "canceled"] as const
+const LABELS = ["bug", "feature", "documentation"] as const
+const PRIORITIES = ["low", "medium", "high"] as const
 
-const tasks = Array.from({ length: 100 }, () => ({
-  id: `TASK-${faker.number.int({ min: 1000, max: 9999 })}`,
-  title: faker.hacker.phrase().replace(/^./, (letter) => letter.toUpperCase()),
-  status: faker.helpers.arrayElement(statuses).value,
-  label: faker.helpers.arrayElement(labels).value,
-  priority: faker.helpers.arrayElement(priorities).value,
+const tasks = Array.from({ length: TASK_COUNT }, (_, index) => ({
+  id: `TASK-${TASK_ID_START + index}`,
+  title: faker.hacker
+    .phrase()
+    .replace(/^./, (letter: string) => letter.toUpperCase()),
+  status: faker.helpers.arrayElement(STATUSES),
+  label: faker.helpers.arrayElement(LABELS),
+  priority: faker.helpers.arrayElement(PRIORITIES),
 }))
 
 fs.writeFileSync(
-  path.join(__dirname, "tasks.json"),
+  new URL("./tasks.json", import.meta.url),
   JSON.stringify(tasks, null, 2)
 )
 
-console.log("✅ Tasks data generated.")
+console.log(`Generated ${tasks.length} demo tasks.`)

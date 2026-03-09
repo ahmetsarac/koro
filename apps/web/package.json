@@ -6,9 +6,11 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "seed:demo-tasks": "node --experimental-strip-types src/app/dashboard/my-issues/data/seed.ts"
   },
   "dependencies": {
+    "@faker-js/faker": "^10.3.0",
     "@hookform/resolvers": "^5.2.2",
     "@tanstack/react-table": "^8.21.3",
     "class-variance-authority": "^0.7.1",
