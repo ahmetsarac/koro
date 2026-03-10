@@ -18,6 +18,8 @@ export type DemoTaskSortDir = "asc" | "desc"
 export type FetchDemoTasksParams = {
   limit?: number
   offset?: number
+  /** Opaque cursor for next page (when set, backend ignores offset) */
+  cursor?: string | null
   q?: string
   /** Single value or multiple (backend accepts comma-separated) */
   status?: string | string[]
@@ -39,7 +41,12 @@ function buildSearchParams(params: FetchDemoTasksParams) {
     if (joined) searchParams.set(key, joined)
   }
 
-  const { status: _s, label: _l, priority: _p, ...rest } = params
+  const { status: _s, label: _l, priority: _p, cursor, offset, ...rest } = params
+  if (cursor) {
+    searchParams.set("cursor", cursor)
+  } else if (offset !== undefined) {
+    searchParams.set("offset", String(offset))
+  }
   Object.entries(rest).forEach(([key, value]) => {
     if (value !== undefined && value !== "") {
       searchParams.set(key, String(value))

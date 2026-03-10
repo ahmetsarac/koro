@@ -27,6 +27,7 @@ export const demoTaskListResponseSchema = z.object({
   limit: z.number().int().positive(),
   offset: z.number().int().nonnegative(),
   has_more: z.boolean(),
+  next_cursor: z.string().nullable().optional(),
   facets: demoTaskFacetsSchema,
 })
 

@@ -38,8 +38,8 @@ import {
 
 import { type DemoTaskFacets, type Task } from "../data/schema"
 
-const ROW_HEIGHT = 40
-const OVERSCAN = 8
+const ROW_HEIGHT = 49
+const OVERSCAN = 2
 const PAGE_SIZE = 50
 const LOAD_MORE_THRESHOLD = 300
 
@@ -55,11 +55,11 @@ const COLUMN_TO_SORT_BY: Record<string, DemoTaskSortBy> = {
 function buildFetchParams(
   sorting: SortingState,
   columnFilters: ColumnFiltersState,
-  offset: number
+  cursor: string | null
 ): FetchDemoTasksParams {
   const params: FetchDemoTasksParams = {
     limit: PAGE_SIZE,
-    offset,
+    ...(cursor ? { cursor } : { offset: 0 }),
   }
 
   const sort = sorting[0]
@@ -91,7 +91,7 @@ interface DataTableProps {
 
 export function DataTable({ columns }: DataTableProps) {
   const [items, setItems] = React.useState<Task[]>([])
-  const [offset, setOffset] = React.useState(0)
+  const [nextCursor, setNextCursor] = React.useState<string | null>(null)
   const [total, setTotal] = React.useState(0)
   const [hasMore, setHasMore] = React.useState(true)
   const [isInitialLoading, setIsInitialLoading] = React.useState(true)
@@ -116,7 +116,7 @@ export function DataTable({ columns }: DataTableProps) {
     let cancelled = false
 
     setItems([])
-    setOffset(0)
+    setNextCursor(null)
     setHasMore(true)
 
     async function loadInitial() {
@@ -124,14 +124,14 @@ export function DataTable({ columns }: DataTableProps) {
         setIsInitialLoading(true)
         setError(null)
 
-        const params = buildFetchParams(sorting, columnFilters, 0)
+        const params = buildFetchParams(sorting, columnFilters, null)
         const res = await fetchDemoTasks(params)
 
         if (cancelled) return
 
         setItems(res.items)
         setTotal(res.total)
-        setOffset(res.offset + res.items.length)
+        setNextCursor(res.next_cursor ?? null)
         setHasMore(res.has_more)
         setFacets(res.facets)
       } catch (e) {
@@ -164,26 +164,26 @@ export function DataTable({ columns }: DataTableProps) {
     return () => observer.disconnect()
   }, [])
 
-  // Sonraki sayfa: aynı sort/filter ile mevcut offset ile fetch, listeye ekle
+  // Sonraki sayfa: cursor ile fetch, listeye ekle
   const loadMore = React.useCallback(async () => {
-    if (isFetchingMore || !hasMore) return
+    if (isFetchingMore || !hasMore || !nextCursor) return
 
     try {
       setIsFetchingMore(true)
 
-      const params = buildFetchParams(sorting, columnFilters, offset)
+      const params = buildFetchParams(sorting, columnFilters, nextCursor)
       const res = await fetchDemoTasks(params)
 
       setItems((prev) => [...prev, ...res.items])
       setTotal(res.total)
-      setOffset(res.offset + res.items.length)
+      setNextCursor(res.next_cursor ?? null)
       setHasMore(res.has_more)
     } catch {
       // İsteğe bağlı: setError veya sessiz bırak
     } finally {
       setIsFetchingMore(false)
     }
-  }, [offset, hasMore, isFetchingMore, sorting, columnFilters])
+  }, [nextCursor, hasMore, isFetchingMore, sorting, columnFilters])
 
   const table = useReactTable({
     data: items,
