@@ -52,17 +52,24 @@ export const columns: ColumnDef<Task>[] = [
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title="Title" />
     ),
+    cell: ({ row }) => (
+      <span className="max-w-[500px] truncate font-medium">
+        {row.getValue("title")}
+      </span>
+    ),
+  },
+  {
+    accessorKey: "label",
+    size: 120,
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title="Label" />
+    ),
     cell: ({ row }) => {
-      const label = labels.find((label) => label.value === row.original.label)
-
-      return (
-        <div className="flex gap-2">
-          {label && <Badge variant="outline">{label.label}</Badge>}
-          <span className="max-w-[500px] truncate font-medium">
-            {row.getValue("title")}
-          </span>
-        </div>
-      )
+      const label = labels.find((l) => l.value === row.getValue("label"))
+      return label ? <Badge variant="outline">{label.label}</Badge> : null
+    },
+    filterFn: (row, id, value) => {
+      return value.includes(row.getValue(id))
     },
   },
   {

@@ -4,11 +4,7 @@ import * as React from "react"
 import {
   flexRender,
   getCoreRowModel,
-  getFacetedRowModel,
   getFacetedUniqueValues,
-  getFilteredRowModel,
-  getPaginationRowModel,
-  getSortedRowModel,
   useReactTable,
   type ColumnDef,
   type ColumnFiltersState,
@@ -24,22 +20,84 @@ import {
   TableRow,
 } from "@/components/ui/table"
 
-import { DataTablePagination } from "./data-table-pagination"
 import { DataTableToolbar } from "./data-table-toolbar"
 import { Button } from "@/components/ui/button"
 import { Grip, X } from "lucide-react"
 import { Separator } from "@/components/ui/separator"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import {
+  fetchDemoTasks,
+  type DemoTaskSortBy,
+  type FetchDemoTasksParams,
+} from "@/lib/demo-tasks"
 
-interface DataTableProps<TData, TValue> {
-  columns: ColumnDef<TData, TValue>[]
-  data: TData[]
+import { type DemoTaskFacets, type Task } from "../data/schema"
+
+const ROW_HEIGHT = 40
+const OVERSCAN = 8
+const PAGE_SIZE = 50
+const LOAD_MORE_THRESHOLD = 300
+
+/** Kolon id → backend sort_by. Backend: sort_order | created_at | id | title | status | label | priority */
+const COLUMN_TO_SORT_BY: Record<string, DemoTaskSortBy> = {
+  id: "id",
+  title: "title",
+  status: "status",
+  label: "label",
+  priority: "priority",
 }
 
-export function DataTable<TData, TValue>({
-  columns,
-  data,
-}: DataTableProps<TData, TValue>) {
+function buildFetchParams(
+  sorting: SortingState,
+  columnFilters: ColumnFiltersState,
+  offset: number
+): FetchDemoTasksParams {
+  const params: FetchDemoTasksParams = {
+    limit: PAGE_SIZE,
+    offset,
+  }
+
+  const sort = sorting[0]
+  if (sort && COLUMN_TO_SORT_BY[sort.id]) {
+    params.sort_by = COLUMN_TO_SORT_BY[sort.id]
+    params.sort_dir = sort.desc ? "desc" : "asc"
+  }
+
+  for (const f of columnFilters) {
+    const v = f.value
+    if (v === undefined || v === "") continue
+    if (f.id === "title") {
+      params.q = typeof v === "string" ? v : String(v)
+    } else if (f.id === "status") {
+      params.status = Array.isArray(v) ? (v as string[]) : [v as string]
+    } else if (f.id === "priority") {
+      params.priority = Array.isArray(v) ? (v as string[]) : [v as string]
+    } else if (f.id === "label") {
+      params.label = Array.isArray(v) ? (v as string[]) : [v as string]
+    }
+  }
+
+  return params
+}
+
+interface DataTableProps {
+  columns: ColumnDef<Task, unknown>[]
+}
+
+export function DataTable({ columns }: DataTableProps) {
+  const [items, setItems] = React.useState<Task[]>([])
+  const [offset, setOffset] = React.useState(0)
+  const [total, setTotal] = React.useState(0)
+  const [hasMore, setHasMore] = React.useState(true)
+  const [isInitialLoading, setIsInitialLoading] = React.useState(true)
+  const [isFetchingMore, setIsFetchingMore] = React.useState(false)
+  const [error, setError] = React.useState<string | null>(null)
+
   const [rowSelection, setRowSelection] = React.useState({})
   const [columnVisibility, setColumnVisibility] =
     React.useState<VisibilityState>({})
@@ -47,10 +105,88 @@ export function DataTable<TData, TValue>({
     []
   )
   const [sorting, setSorting] = React.useState<SortingState>([])
-  
+  const [scrollTop, setScrollTop] = React.useState(0)
+  const [containerHeight, setContainerHeight] = React.useState(0)
+  const [facets, setFacets] = React.useState<DemoTaskFacets | null>(null)
+
+  const scrollContainerRef = React.useRef<HTMLDivElement>(null)
+
+  // İlk yükleme + sort/filter değişince sıfırdan yükle
+  React.useEffect(() => {
+    let cancelled = false
+
+    setItems([])
+    setOffset(0)
+    setHasMore(true)
+
+    async function loadInitial() {
+      try {
+        setIsInitialLoading(true)
+        setError(null)
+
+        const params = buildFetchParams(sorting, columnFilters, 0)
+        const res = await fetchDemoTasks(params)
+
+        if (cancelled) return
+
+        setItems(res.items)
+        setTotal(res.total)
+        setOffset(res.offset + res.items.length)
+        setHasMore(res.has_more)
+        setFacets(res.facets)
+      } catch (e) {
+        if (!cancelled) {
+          setError(
+            e instanceof Error ? e.message : "Failed to load demo tasks."
+          )
+        }
+      } finally {
+        if (!cancelled) setIsInitialLoading(false)
+      }
+    }
+
+    loadInitial()
+    return () => {
+      cancelled = true
+    }
+  }, [sorting, columnFilters])
+
+  // Container yüksekliği
+  React.useLayoutEffect(() => {
+    const container = scrollContainerRef.current
+    if (!container) return
+
+    const updateHeight = () => setContainerHeight(container.clientHeight)
+    updateHeight()
+
+    const observer = new ResizeObserver(updateHeight)
+    observer.observe(container)
+    return () => observer.disconnect()
+  }, [])
+
+  // Sonraki sayfa: aynı sort/filter ile mevcut offset ile fetch, listeye ekle
+  const loadMore = React.useCallback(async () => {
+    if (isFetchingMore || !hasMore) return
+
+    try {
+      setIsFetchingMore(true)
+
+      const params = buildFetchParams(sorting, columnFilters, offset)
+      const res = await fetchDemoTasks(params)
+
+      setItems((prev) => [...prev, ...res.items])
+      setTotal(res.total)
+      setOffset(res.offset + res.items.length)
+      setHasMore(res.has_more)
+    } catch {
+      // İsteğe bağlı: setError veya sessiz bırak
+    } finally {
+      setIsFetchingMore(false)
+    }
+  }, [offset, hasMore, isFetchingMore, sorting, columnFilters])
 
   const table = useReactTable({
-    data,
+    data: items,
     columns,
     state: {
       sorting,
@@ -58,25 +194,61 @@ export function DataTable<TData, TValue>({
       rowSelection,
       columnFilters,
     },
-    initialState: {
-      pagination: {
-        pageSize: 25,
-      },
-    },
     enableRowSelection: true,
     onRowSelectionChange: setRowSelection,
     onSortingChange: setSorting,
     onColumnFiltersChange: setColumnFilters,
     onColumnVisibilityChange: setColumnVisibility,
     getCoreRowModel: getCoreRowModel(),
-    getFilteredRowModel: getFilteredRowModel(),
-    getPaginationRowModel: getPaginationRowModel(),
-    getSortedRowModel: getSortedRowModel(),
-    getFacetedRowModel: getFacetedRowModel(),
     getFacetedUniqueValues: getFacetedUniqueValues(),
   })
 
-  const selectedCount = table.getFilteredSelectedRowModel().rows.length;
+  // Sort/filter değişince scroll başa
+  React.useEffect(() => {
+    scrollContainerRef.current?.scrollTo({ top: 0 })
+    setScrollTop(0)
+  }, [sorting, columnFilters])
+
+  const rows = table.getRowModel().rows
+  const selectedCount = table.getSelectedRowModel().rows.length
+  const visibleColumnCount =
+    table.getVisibleLeafColumns().length || columns.length
+
+  const visibleCount =
+    containerHeight > 0 ? Math.ceil(containerHeight / ROW_HEIGHT) : 12
+
+  const startIndex = Math.max(
+    0,
+    Math.floor(scrollTop / ROW_HEIGHT) - OVERSCAN
+  )
+  const endIndex = Math.min(
+    rows.length,
+    startIndex + visibleCount + OVERSCAN * 2
+  )
+
+  const visibleRows = rows.slice(startIndex, endIndex)
+  const topSpacerHeight = startIndex * ROW_HEIGHT
+  const bottomSpacerHeight = Math.max(0, (rows.length - endIndex) * ROW_HEIGHT)
+
+  // Scroll: pozisyonu güncelle + dibe yakınsa loadMore
+  const handleScroll = React.useCallback(
+    (event: React.UIEvent<HTMLDivElement>) => {
+      const el = event.currentTarget
+      setScrollTop(el.scrollTop)
+
+      const distanceToBottom =
+        el.scrollHeight - el.scrollTop - el.clientHeight
+
+      if (
+        distanceToBottom < LOAD_MORE_THRESHOLD &&
+        hasMore &&
+        !isFetchingMore
+      ) {
+        void loadMore()
+      }
+    },
+    [hasMore, isFetchingMore, loadMore]
+  )
 
   const colGroup = (
     <colgroup>
@@ -88,12 +260,14 @@ export function DataTable<TData, TValue>({
 
   return (
     <div className="flex flex-1 min-h-0 flex-col gap-4">
-      <DataTableToolbar table={table} />
+      <DataTableToolbar table={table} facets={facets} />
+
       <div className="relative min-h-0 flex-1 flex flex-col rounded-md border overflow-hidden">
         <SelectionOverlay
           selectedCount={selectedCount}
           onClearSelection={() => table.resetRowSelection()}
         />
+
         <table className="w-full text-xs" style={{ tableLayout: "fixed" }}>
           {colGroup}
           <TableHeader>
@@ -117,30 +291,82 @@ export function DataTable<TData, TValue>({
             ))}
           </TableHeader>
         </table>
-        <div className="relative overflow-y-auto flex-1 min-h-0">
+
+        <div
+          ref={scrollContainerRef}
+          className="relative overflow-y-auto flex-1 min-h-0"
+          onScroll={handleScroll}
+        >
           <table className="w-full text-xs" style={{ tableLayout: "fixed" }}>
             {colGroup}
             <TableBody>
-              {table.getRowModel().rows?.length ? (
-                table.getRowModel().rows.map((row) => (
-                  <TableRow
-                    key={row.id}
-                    data-state={row.getIsSelected() && "selected"}
+              {isInitialLoading ? (
+                <TableRow>
+                  <TableCell
+                    colSpan={visibleColumnCount}
+                    className="h-24 text-center"
                   >
-                    {row.getVisibleCells().map((cell) => (
-                      <TableCell key={cell.id}>
-                        {flexRender(
-                          cell.column.columnDef.cell,
-                          cell.getContext()
-                        )}
-                      </TableCell>
-                    ))}
-                  </TableRow>
-                ))
+                    Loading demo tasks...
+                  </TableCell>
+                </TableRow>
+              ) : error ? (
+                <TableRow>
+                  <TableCell
+                    colSpan={visibleColumnCount}
+                    className="h-24 text-center text-destructive"
+                  >
+                    {error}
+                  </TableCell>
+                </TableRow>
+              ) : rows.length ? (
+                <>
+                  {topSpacerHeight > 0 && (
+                    <TableRow
+                      aria-hidden="true"
+                      className="hover:bg-transparent"
+                    >
+                      <TableCell
+                        colSpan={visibleColumnCount}
+                        className="p-0"
+                        style={{ height: topSpacerHeight }}
+                      />
+                    </TableRow>
+                  )}
+
+                  {visibleRows.map((row) => (
+                    <TableRow
+                      key={row.id}
+                      data-state={row.getIsSelected() && "selected"}
+                      style={{ height: ROW_HEIGHT }}
+                    >
+                      {row.getVisibleCells().map((cell) => (
+                        <TableCell key={cell.id}>
+                          {flexRender(
+                            cell.column.columnDef.cell,
+                            cell.getContext()
+                          )}
+                        </TableCell>
+                      ))}
+                    </TableRow>
+                  ))}
+
+                  {bottomSpacerHeight > 0 && (
+                    <TableRow
+                      aria-hidden="true"
+                      className="hover:bg-transparent"
+                    >
+                      <TableCell
+                        colSpan={visibleColumnCount}
+                        className="p-0"
+                        style={{ height: bottomSpacerHeight }}
+                      />
+                    </TableRow>
+                  )}
+                </>
               ) : (
                 <TableRow>
                   <TableCell
-                    colSpan={columns.length}
+                    colSpan={visibleColumnCount}
                     className="h-24 text-center"
                   >
                     No results.
@@ -151,7 +377,14 @@ export function DataTable<TData, TValue>({
           </table>
         </div>
       </div>
-      <DataTablePagination table={table} />
+
+      <div className="flex items-center justify-between px-2 text-sm text-muted-foreground">
+        <span>{rows.length} row(s) loaded from API.</span>
+        <span>
+          {total > 0 ? `${items.length} / ${total}` : "—"}
+        </span>
+        {isFetchingMore && <span>Loading more…</span>}
+      </div>
     </div>
   )
 }
@@ -181,23 +414,30 @@ function SelectionOverlay({
             <span className="sr-only">Clear selection</span>
           </Button>
         </div>
+
         <Separator
           orientation="vertical"
           className="mx-1 h-5 data-vertical:self-auto"
         />
+
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-          <Button className="rounded-md border border-sidebar-border bg-sidebar px-3 text-foreground hover:bg-background/90 hover:text-foreground">
-            <Grip />
-            Actions
-          </Button>
+            <Button className="rounded-md border border-sidebar-border bg-sidebar px-3 text-foreground hover:bg-background/90 hover:text-foreground">
+              <Grip />
+              Actions
+            </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="center" side="top" sideOffset={12} className="min-w-24">
+          <DropdownMenuContent
+            align="center"
+            side="top"
+            sideOffset={12}
+            className="min-w-24"
+          >
             <DropdownMenuItem>Edit</DropdownMenuItem>
             <DropdownMenuItem>Delete</DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
-        </div>
+      </div>
     </div>
-  );
+  )
 }

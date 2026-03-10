@@ -29,15 +29,20 @@ interface DataTableFacetedFilterProps<TData, TValue> {
     value: string
     icon?: React.ComponentType<{ className?: string }>
   }[]
+  /** When set (e.g. from server), show these counts instead of client-side facet counts */
+  facetCounts?: Record<string, number>
 }
 
 export function DataTableFacetedFilter<TData, TValue>({
   column,
   title,
   options,
+  facetCounts,
 }: DataTableFacetedFilterProps<TData, TValue>) {
-  const facets = column?.getFacetedUniqueValues()
+  const clientFacets = column?.getFacetedUniqueValues()
   const selectedValues = new Set(column?.getFilterValue() as string[])
+  const countFor = (value: string) =>
+    facetCounts?.[value] ?? clientFacets?.get(value)
 
   return (
     <Popover>
@@ -117,9 +122,9 @@ export function DataTableFacetedFilter<TData, TValue>({
                       <option.icon className="size-4 text-muted-foreground" />
                     )}
                     <span>{option.label}</span>
-                    {facets?.get(option.value) && (
+                    {countFor(option.value) != null && (
                       <span className="ml-auto flex size-4 items-center justify-center font-mono text-xs text-muted-foreground">
-                        {facets.get(option.value)}
+                        {countFor(option.value)}
                       </span>
                     )}
                   </CommandItem>

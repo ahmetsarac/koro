@@ -12,12 +12,22 @@ export const taskSchema = z.object({
 
 export type Task = z.infer<typeof taskSchema>
 
+/** Server-side facet counts: value -> count (e.g. { status: { backlog: 1200 } }) */
+export const demoTaskFacetsSchema = z.object({
+  status: z.record(z.string(), z.number().int().nonnegative()),
+  label: z.record(z.string(), z.number().int().nonnegative()),
+  priority: z.record(z.string(), z.number().int().nonnegative()),
+})
+
+export type DemoTaskFacets = z.infer<typeof demoTaskFacetsSchema>
+
 export const demoTaskListResponseSchema = z.object({
   items: z.array(taskSchema),
   total: z.number().int().nonnegative(),
   limit: z.number().int().positive(),
   offset: z.number().int().nonnegative(),
   has_more: z.boolean(),
+  facets: demoTaskFacetsSchema,
 })
 
 export type DemoTaskListResponse = z.infer<typeof demoTaskListResponseSchema>

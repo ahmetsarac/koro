@@ -7,15 +7,19 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { DataTableViewOptions } from "./data-table-view-options"
 
-import { priorities, statuses } from "../data/data"
+import { labels, priorities, statuses } from "../data/data"
+import { type DemoTaskFacets } from "../data/schema"
 import { DataTableFacetedFilter } from "./data-table-faceted-filter"
 
 interface DataTableToolbarProps<TData> {
   table: Table<TData>
+  /** Server-side facet counts (from full result set); when set, filter dropdowns show these instead of client-loaded counts */
+  facets?: DemoTaskFacets | null
 }
 
 export function DataTableToolbar<TData>({
   table,
+  facets = null,
 }: DataTableToolbarProps<TData>) {
   const isFiltered = table.getState().columnFilters.length > 0
 
@@ -35,6 +39,15 @@ export function DataTableToolbar<TData>({
             column={table.getColumn("status")}
             title="Status"
             options={statuses}
+            facetCounts={facets?.status}
+          />
+        )}
+        {table.getColumn("label") && (
+          <DataTableFacetedFilter
+            column={table.getColumn("label")}
+            title="Label"
+            options={labels}
+            facetCounts={facets?.label}
           />
         )}
         {table.getColumn("priority") && (
@@ -42,6 +55,7 @@ export function DataTableToolbar<TData>({
             column={table.getColumn("priority")}
             title="Priority"
             options={priorities}
+            facetCounts={facets?.priority}
           />
         )}
         {isFiltered && (

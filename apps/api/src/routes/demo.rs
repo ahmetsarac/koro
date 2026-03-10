@@ -151,6 +151,12 @@ pub struct DemoTaskItem {
 }
 
 #[derive(FromRow)]
+struct FacetRow {
+    value: String,
+    count: i64,
+}
+
+#[derive(FromRow)]
 struct DemoTaskRow {
     id: String,
     title: String,
@@ -173,6 +179,14 @@ impl From<DemoTaskRow> for DemoTaskItem {
     }
 }
 
+/// Per-facet counts (e.g. status -> { "backlog": 1200, "todo": 500 }) for the current filter context.
+#[derive(Debug, Default, Serialize)]
+pub struct DemoTaskFacets {
+    pub status: std::collections::HashMap<String, i64>,
+    pub label: std::collections::HashMap<String, i64>,
+    pub priority: std::collections::HashMap<String, i64>,
+}
+
 #[derive(Serialize)]
 pub struct ListDemoTasksResponse {
     pub items: Vec<DemoTaskItem>,
@@ -183,6 +197,52 @@ pub struct ListDemoTasksResponse {
     pub has_more: bool,
     pub sort_by: DemoTaskSortBy,
     pub sort_dir: SortDirection,
+    pub facets: DemoTaskFacets,
+}
+
+async fn fetch_facet_counts(
+    pool: &sqlx::PgPool,
+    query: &ListDemoTasksQuery,
+) -> Result<DemoTaskFacets, sqlx::Error> {
+    let mut facets = DemoTaskFacets::default();
+
+    let mut status_builder =
+        QueryBuilder::<Postgres>::new("SELECT status as value, COUNT(*) as count FROM demo_tasks WHERE 1=1");
+    apply_filters_excluding(&mut status_builder, query, Some("status"));
+    status_builder.push(" GROUP BY status");
+    let rows: Vec<FacetRow> = status_builder
+        .build_query_as::<FacetRow>()
+        .fetch_all(pool)
+        .await?;
+    for row in rows {
+        facets.status.insert(row.value, row.count);
+    }
+
+    let mut label_builder =
+        QueryBuilder::<Postgres>::new("SELECT label as value, COUNT(*) as count FROM demo_tasks WHERE 1=1");
+    apply_filters_excluding(&mut label_builder, query, Some("label"));
+    label_builder.push(" GROUP BY label");
+    let rows: Vec<FacetRow> = label_builder
+        .build_query_as::<FacetRow>()
+        .fetch_all(pool)
+        .await?;
+    for row in rows {
+        facets.label.insert(row.value, row.count);
+    }
+
+    let mut priority_builder =
+        QueryBuilder::<Postgres>::new("SELECT priority as value, COUNT(*) as count FROM demo_tasks WHERE 1=1");
+    apply_filters_excluding(&mut priority_builder, query, Some("priority"));
+    priority_builder.push(" GROUP BY priority");
+    let rows: Vec<FacetRow> = priority_builder
+        .build_query_as::<FacetRow>()
+        .fetch_all(pool)
+        .await?;
+    for row in rows {
+        facets.priority.insert(row.value, row.count);
+    }
+
+    Ok(facets)
 }
 
 pub async fn list_demo_tasks(
@@ -222,6 +282,14 @@ pub async fn list_demo_tasks(
         Ok(total) => total,
         Err(error) => {
             eprintln!("list_demo_tasks count error: {error:?}");
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
+    };
+
+    let facets = match fetch_facet_counts(&state.db, &query).await {
+        Ok(f) => f,
+        Err(error) => {
+            eprintln!("list_demo_tasks facet count error: {error:?}");
             return StatusCode::INTERNAL_SERVER_ERROR.into_response();
         }
     };
@@ -300,24 +368,68 @@ pub async fn list_demo_tasks(
             has_more,
             sort_by,
             sort_dir,
+            facets,
         }),
     )
         .into_response()
 }
 
 fn apply_filters(builder: &mut QueryBuilder<Postgres>, query: &ListDemoTasksQuery) {
-    if let Some(status) = query.status.as_deref() {
-        builder.push(" AND status = ").push_bind(status.to_string());
+    apply_filters_excluding(builder, query, None);
+}
+
+/// Applies filters from query, optionally excluding one facet so its dropdown shows all options with counts.
+fn apply_filters_excluding(
+    builder: &mut QueryBuilder<Postgres>,
+    query: &ListDemoTasksQuery,
+    exclude_facet: Option<&str>,
+) {
+    if exclude_facet != Some("status") {
+        if let Some(s) = query.status.as_deref() {
+            let values: Vec<&str> = s.split(',').map(str::trim).filter(|x| !x.is_empty()).collect();
+            if !values.is_empty() {
+                builder.push(" AND status IN (");
+                for (i, v) in values.iter().enumerate() {
+                    if i > 0 {
+                        builder.push(", ");
+                    }
+                    builder.push_bind((*v).to_string());
+                }
+                builder.push(")");
+            }
+        }
     }
 
-    if let Some(label) = query.label.as_deref() {
-        builder.push(" AND label = ").push_bind(label.to_string());
+    if exclude_facet != Some("label") {
+        if let Some(s) = query.label.as_deref() {
+            let values: Vec<&str> = s.split(',').map(str::trim).filter(|x| !x.is_empty()).collect();
+            if !values.is_empty() {
+                builder.push(" AND label IN (");
+                for (i, v) in values.iter().enumerate() {
+                    if i > 0 {
+                        builder.push(", ");
+                    }
+                    builder.push_bind((*v).to_string());
+                }
+                builder.push(")");
+            }
+        }
     }
 
-    if let Some(priority) = query.priority.as_deref() {
-        builder
-            .push(" AND priority = ")
-            .push_bind(priority.to_string());
+    if exclude_facet != Some("priority") {
+        if let Some(s) = query.priority.as_deref() {
+            let values: Vec<&str> = s.split(',').map(str::trim).filter(|x| !x.is_empty()).collect();
+            if !values.is_empty() {
+                builder.push(" AND priority IN (");
+                for (i, v) in values.iter().enumerate() {
+                    if i > 0 {
+                        builder.push(", ");
+                    }
+                    builder.push_bind((*v).to_string());
+                }
+                builder.push(")");
+            }
+        }
     }
 
     if let Some(search) = query.q.as_deref() {
