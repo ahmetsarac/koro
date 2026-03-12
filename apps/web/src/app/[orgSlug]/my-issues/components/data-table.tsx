@@ -36,6 +36,48 @@ const ROW_HEIGHT = 49
 const OVERSCAN = 2
 const PAGE_SIZE = 50
 const LOAD_MORE_THRESHOLD = 300
+const STORAGE_KEY_PREFIX = "my-issues-scroll"
+
+interface ScrollState {
+  scrollTop: number
+  items: Issue[]
+  nextCursor: string | null
+  total: number
+  hasMore: boolean
+  facets: IssueFacets | null
+}
+
+function getStorageKey(filterType: IssueFilterType): string {
+  return `${STORAGE_KEY_PREFIX}-${filterType}`
+}
+
+function saveScrollState(filterType: IssueFilterType, state: ScrollState): void {
+  try {
+    sessionStorage.setItem(getStorageKey(filterType), JSON.stringify(state))
+  } catch {
+    // Storage full or unavailable
+  }
+}
+
+function loadScrollState(filterType: IssueFilterType): ScrollState | null {
+  try {
+    const saved = sessionStorage.getItem(getStorageKey(filterType))
+    if (saved) {
+      return JSON.parse(saved) as ScrollState
+    }
+  } catch {
+    // Parse error or unavailable
+  }
+  return null
+}
+
+function clearScrollState(filterType: IssueFilterType): void {
+  try {
+    sessionStorage.removeItem(getStorageKey(filterType))
+  } catch {
+    // Unavailable
+  }
+}
 
 /** Kolon id → backend sort_by. Backend: created_at | updated_at | key_seq | title | status | priority */
 const COLUMN_TO_SORT_BY: Record<string, IssueSortBy> = {
@@ -104,9 +146,31 @@ export function DataTable({ columns, filterType }: DataTableProps) {
   const [facets, setFacets] = React.useState<IssueFacets | null>(null)
 
   const scrollContainerRef = React.useRef<HTMLDivElement>(null)
+  const hasRestoredRef = React.useRef(false)
+  const pendingScrollTopRef = React.useRef<number | null>(null)
 
-  // İlk yükleme + sort/filter değişince sıfırdan yükle
+  // İlk yükleme: cache'den restore et veya API'den yükle
   React.useEffect(() => {
+    // Zaten restore edilmişse bir şey yapma (Strict Mode için)
+    if (hasRestoredRef.current) {
+      return
+    }
+    hasRestoredRef.current = true
+
+    // Cache'den restore dene
+    const savedState = loadScrollState(filterType)
+    if (savedState && savedState.items.length > 0) {
+      setItems(savedState.items)
+      setNextCursor(savedState.nextCursor)
+      setTotal(savedState.total)
+      setHasMore(savedState.hasMore)
+      setFacets(savedState.facets)
+      setIsInitialLoading(false)
+      pendingScrollTopRef.current = savedState.scrollTop
+      return
+    }
+
+    // Cache yoksa API'den yükle
     let cancelled = false
 
     setItems([])
@@ -143,7 +207,34 @@ export function DataTable({ columns, filterType }: DataTableProps) {
     return () => {
       cancelled = true
     }
-  }, [sorting, columnFilters, filterType])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filterType])
+
+  // Scroll pozisyonunu restore et
+  React.useEffect(() => {
+    if (pendingScrollTopRef.current !== null && !isInitialLoading && items.length > 0) {
+      const scrollTop = pendingScrollTopRef.current
+      pendingScrollTopRef.current = null
+      requestAnimationFrame(() => {
+        scrollContainerRef.current?.scrollTo({ top: scrollTop })
+        setScrollTop(scrollTop)
+      })
+    }
+  }, [isInitialLoading, items.length])
+
+  // State'i sessionStorage'a kaydet
+  React.useEffect(() => {
+    if (items.length > 0 && !isInitialLoading) {
+      saveScrollState(filterType, {
+        scrollTop,
+        items,
+        nextCursor,
+        total,
+        hasMore,
+        facets,
+      })
+    }
+  }, [scrollTop, items, nextCursor, total, hasMore, facets, filterType, isInitialLoading])
 
   // Container yüksekliği
   React.useLayoutEffect(() => {
@@ -197,11 +288,59 @@ export function DataTable({ columns, filterType }: DataTableProps) {
     getFacetedUniqueValues: getFacetedUniqueValues(),
   })
 
-  // Sort/filter değişince scroll başa
+  // Sort/filter değişince cache temizle, scroll başa al ve yeniden yükle
+  const prevSortingRef = React.useRef(sorting)
+  const prevFiltersRef = React.useRef(columnFilters)
+
   React.useEffect(() => {
-    scrollContainerRef.current?.scrollTo({ top: 0 })
-    setScrollTop(0)
-  }, [sorting, columnFilters])
+    const sortingChanged = JSON.stringify(prevSortingRef.current) !== JSON.stringify(sorting)
+    const filtersChanged = JSON.stringify(prevFiltersRef.current) !== JSON.stringify(columnFilters)
+
+    if (sortingChanged || filtersChanged) {
+      prevSortingRef.current = sorting
+      prevFiltersRef.current = columnFilters
+
+      clearScrollState(filterType)
+      scrollContainerRef.current?.scrollTo({ top: 0 })
+      setScrollTop(0)
+
+      // Yeniden yükle
+      let cancelled = false
+
+      setItems([])
+      setNextCursor(null)
+      setHasMore(true)
+
+      async function reload() {
+        try {
+          setIsInitialLoading(true)
+          setError(null)
+
+          const params = buildFetchParams(sorting, columnFilters, null, filterType)
+          const res = await fetchMyIssues(params)
+
+          if (cancelled) return
+
+          setItems(res.items)
+          setTotal(res.total)
+          setNextCursor(res.next_cursor ?? null)
+          setHasMore(res.has_more)
+          setFacets(res.facets)
+        } catch (e) {
+          if (!cancelled) {
+            setError(e instanceof Error ? e.message : "Failed to load issues.")
+          }
+        } finally {
+          if (!cancelled) setIsInitialLoading(false)
+        }
+      }
+
+      reload()
+      return () => {
+        cancelled = true
+      }
+    }
+  }, [sorting, columnFilters, filterType])
 
   const rows = table.getRowModel().rows
   const selectedCount = table.getSelectedRowModel().rows.length
