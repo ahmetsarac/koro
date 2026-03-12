@@ -29,6 +29,7 @@ import {
 
 import { type IssueFacets, type Issue } from "../data/schema"
 import { DataTableSelectionOverlay } from "./data-table-selection-overlay"
+import { RotateCw } from "lucide-react"
 
 const ROW_HEIGHT = 49
 const OVERSCAN = 2
@@ -367,12 +368,17 @@ export function DataTable({ columns }: DataTableProps) {
         </div>
       </div>
 
-      <div className="flex items-center justify-between px-2 text-sm text-muted-foreground">
-        <span>{rows.length} row(s) loaded from API.</span>
+      <div className="relative flex items-center justify-center px-2 py-1 text-sm text-muted-foreground">
         <span>
           {total > 0 ? `${items.length} / ${total}` : "—"}
         </span>
-        {isFetchingMore && <span>Loading more…</span>}
+        
+        {isFetchingMore && (
+          <span className="absolute right-2 flex items-center text-xs">
+            <RotateCw className="w-3 h-3 mr-1.5 animate-spin" />
+            Loading…
+          </span>
+        )}
       </div>
     </div>
   )
