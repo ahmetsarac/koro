@@ -2,7 +2,6 @@ import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 
 import { AuthApiError, refreshWithApi } from "@/lib/auth/backend";
-import { DEFAULT_ORG_HOME } from "@/lib/auth/constants";
 import {
   ACCESS_TOKEN_COOKIE_NAME,
   REFRESH_TOKEN_COOKIE_NAME,
@@ -25,7 +24,7 @@ function buildLoginUrl(request: NextRequest) {
   const loginUrl = new URL("/login", request.url);
   const nextPath = `${request.nextUrl.pathname}${request.nextUrl.search}`;
 
-  if (nextPath !== DEFAULT_ORG_HOME) {
+  if (nextPath !== "/") {
     loginUrl.searchParams.set("next", nextPath);
   }
 
@@ -34,6 +33,15 @@ function buildLoginUrl(request: NextRequest) {
 
 export async function proxy(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
+
+  if (
+    pathname.startsWith("/api") ||
+    pathname.startsWith("/_next") ||
+    pathname === "/favicon.ico"
+  ) {
+    return NextResponse.next();
+  }
+
   const accessToken = request.cookies.get(ACCESS_TOKEN_COOKIE_NAME)?.value;
   const refreshToken = request.cookies.get(REFRESH_TOKEN_COOKIE_NAME)?.value;
   const secret = getJwtSecret();
@@ -44,7 +52,7 @@ export async function proxy(request: NextRequest) {
 
   if (pathname === "/login") {
     if (accessClaims) {
-      return NextResponse.redirect(new URL(DEFAULT_ORG_HOME, request.url));
+      return NextResponse.redirect(new URL("/", request.url));
     }
 
     if (refreshToken) {
@@ -53,9 +61,7 @@ export async function proxy(request: NextRequest) {
       if (refreshClaims) {
         try {
           const tokens = await refreshWithApi(refreshToken);
-          const response = NextResponse.redirect(
-            new URL(DASHBOARD_HOME, request.url),
-          );
+          const response = NextResponse.redirect(new URL("/", request.url));
 
           setAuthCookies(response, tokens);
 
@@ -105,5 +111,5 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/login", "/:orgSlug/:path*"],
+  matcher: ["/", "/login", "/((?!api|_next|favicon.ico).*)"],
 };

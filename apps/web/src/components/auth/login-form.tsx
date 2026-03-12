@@ -1,31 +1,38 @@
-"use client";
+"use client"
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useState } from "react"
+import { useRouter } from "next/navigation"
 
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card"
+import { Label } from "@/components/ui/label"
 
 function getErrorMessage(error: unknown) {
   if (error instanceof Error) {
-    return error.message;
+    return error.message
   }
 
-  return "Login failed";
+  return "Login failed"
 }
 
 export function LoginForm({ nextPath }: { nextPath: string }) {
-  const router = useRouter();
-  const [email, setEmail] = useState("ahmet@koro.local");
-  const [password, setPassword] = useState("password123");
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const router = useRouter()
+  const [email, setEmail] = useState("ahmet@koro.local")
+  const [password, setPassword] = useState("password123")
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setError(null);
-    setLoading(true);
+    event.preventDefault()
+    setError(null)
+    setLoading(true)
 
     try {
       const response = await fetch("/api/auth/login", {
@@ -37,59 +44,64 @@ export function LoginForm({ nextPath }: { nextPath: string }) {
           email,
           password,
         }),
-      });
+      })
 
       if (!response.ok) {
         const data = (await response.json().catch(() => null)) as
           | { message?: string }
-          | null;
+          | null
 
-        throw new Error(data?.message ?? "Login failed");
+        throw new Error(data?.message ?? "Login failed")
       }
 
-      router.replace(nextPath);
-      router.refresh();
+      router.replace(nextPath)
+      router.refresh()
     } catch (error) {
-      setError(getErrorMessage(error));
+      setError(getErrorMessage(error))
     } finally {
-      setLoading(false);
+      setLoading(false)
     }
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-950 p-4 text-zinc-50">
-      <Card className="w-full max-w-sm border-zinc-800 bg-zinc-900 text-zinc-50">
+    <div className="flex min-h-screen items-center justify-center bg-muted/30 p-4">
+      <Card className="w-full max-w-sm border bg-card/95 shadow-sm backdrop-blur">
         <CardHeader>
-          <CardTitle>Koro’ya giriş</CardTitle>
+          <CardTitle className="text-2xl">Koro'ya giriş</CardTitle>
+          <CardDescription>
+            Issue tracker hesabınla oturum aç.
+          </CardDescription>
         </CardHeader>
         <CardContent>
-          <form onSubmit={onSubmit} className="space-y-3">
-            <div className="space-y-1">
-              <label className="text-sm text-zinc-300">Email</label>
+          <form onSubmit={onSubmit} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="email">Email</Label>
               <Input
+                id="email"
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
                 autoComplete="email"
-                className="border-zinc-800 bg-zinc-950"
+                placeholder="email@example.com"
               />
             </div>
 
-            <div className="space-y-1">
-              <label className="text-sm text-zinc-300">Password</label>
+            <div className="space-y-2">
+              <Label htmlFor="password">Password</Label>
               <Input
+                id="password"
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
                 type="password"
                 autoComplete="current-password"
-                className="border-zinc-800 bg-zinc-950"
+                placeholder="••••••••"
               />
             </div>
 
-            {error ? (
-              <div className="text-sm text-red-500">{error}</div>
-            ) : null}
+            {error && (
+              <div className="text-sm text-destructive">{error}</div>
+            )}
 
-            <div className="text-xs text-zinc-400">
+            <div className="text-xs text-muted-foreground">
               Demo kullanıcı: <span className="font-medium">{email}</span>
             </div>
 
@@ -100,5 +112,5 @@ export function LoginForm({ nextPath }: { nextPath: string }) {
         </CardContent>
       </Card>
     </div>
-  );
+  )
 }

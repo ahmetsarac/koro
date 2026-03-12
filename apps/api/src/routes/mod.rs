@@ -16,10 +16,12 @@ mod orgs;
 mod projects;
 mod relations;
 mod setup;
+mod users;
 
 pub fn router(state: AppState) -> Router {
     Router::new()
         .route("/health", get(health::health))
+        .route("/me", get(users::get_me))
         .route("/my-issues", get(issues::list_my_issues))
         .route("/projects", get(projects::list_projects))
         .route("/setup", post(setup::setup))

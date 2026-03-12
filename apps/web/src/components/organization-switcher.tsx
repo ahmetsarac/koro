@@ -16,15 +16,15 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
-  useSidebar,
 } from "@/components/ui/sidebar"
 import { ChevronsUpDownIcon, PlusIcon } from "lucide-react"
 
 interface Organization {
+  id: string
   name: string
   slug: string
+  role: string
   logo: React.ReactNode
-  plan: string
 }
 
 export function OrganizationSwitcher({
@@ -62,7 +62,9 @@ export function OrganizationSwitcher({
                 <span className="truncate font-medium">
                   {activeOrganization.name}
                 </span>
-                <span className="truncate text-xs">{activeOrganization.plan}</span>
+                <span className="truncate text-xs capitalize">
+                  {activeOrganization.role.replaceAll("_", " ")}
+                </span>
               </div>
               <ChevronsUpDownIcon className="ml-auto" />
             </SidebarMenuButton>

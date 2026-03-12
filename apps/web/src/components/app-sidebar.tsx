@@ -1,6 +1,4 @@
-"use client"
-
-import * as React from "react"
+import { cookies } from "next/headers"
 
 import { NavMain } from "@/components/nav-main"
 import { NavProjects } from "@/components/nav-projects"
@@ -14,45 +12,16 @@ import {
   SidebarRail,
 } from "@/components/ui/sidebar"
 import {
-  GalleryVerticalEndIcon,
-  AudioLinesIcon,
-  TerminalIcon,
   BookOpenIcon,
   Crosshair,
   Boxes,
   Settings,
-  BlocksIcon,
-  KeyRoundIcon,
-  WorkflowIcon,
+  Building2,
 } from "lucide-react"
-
-const staticData = {
-  user: {
-    name: "shadcn",
-    email: "m@example.com",
-    avatar: "/avatars/shadcn.jpg",
-  },
-  organizations: [
-    {
-      name: "Acme Inc",
-      slug: "acme",
-      logo: <GalleryVerticalEndIcon />,
-      plan: "Enterprise",
-    },
-    {
-      name: "Acme Corp.",
-      slug: "acme-corp",
-      logo: <AudioLinesIcon />,
-      plan: "Startup",
-    },
-    {
-      name: "Evil Corp.",
-      slug: "evil-corp",
-      logo: <TerminalIcon />,
-      plan: "Free",
-    },
-  ],
-}
+import { getApiBaseUrl } from "@/lib/api/backend"
+import { ACCESS_TOKEN_COOKIE_NAME } from "@/lib/auth/constants"
+import { meResponseSchema } from "@/lib/user"
+import { projectListResponseSchema } from "@/app/[orgSlug]/projects/data/schema"
 
 function getNavItems(orgSlug: string) {
   return [
@@ -79,45 +48,87 @@ function getNavItems(orgSlug: string) {
   ]
 }
 
-function getProjects(orgSlug: string) {
-  return [
-    {
-      name: "Core Platform",
-      key: "KORO",
-      url: `/${orgSlug}/projects/KORO`,
-      icon: <BlocksIcon />,
-      openIssueCount: 24,
-    },
-    {
-      name: "Authentication",
-      key: "AUTH",
-      url: `/${orgSlug}/projects/AUTH`,
-      icon: <KeyRoundIcon />,
-      openIssueCount: 9,
-    },
-    {
-      name: "Workflow Engine",
-      key: "FLOW",
-      url: `/${orgSlug}/projects/FLOW`,
-      icon: <WorkflowIcon />,
-      openIssueCount: 13,
-    },
-  ]
+async function fetchSidebarData(orgSlug: string) {
+  const cookieStore = await cookies()
+  const accessToken = cookieStore.get(ACCESS_TOKEN_COOKIE_NAME)?.value
+
+  if (!accessToken) {
+    return {
+      me: null,
+      projects: [],
+    }
+  }
+
+  const headers = {
+    Authorization: `Bearer ${accessToken}`,
+  }
+
+  const [meResponse, projectsResponse] = await Promise.all([
+    fetch(`${getApiBaseUrl()}/me`, {
+      cache: "no-store",
+      headers,
+    }),
+    fetch(`${getApiBaseUrl()}/projects?limit=8`, {
+      cache: "no-store",
+      headers,
+    }),
+  ])
+
+  const me = meResponse.ok
+    ? meResponseSchema.parse(await meResponse.json())
+    : null
+
+  const projects = projectsResponse.ok
+    ? projectListResponseSchema
+        .parse(await projectsResponse.json())
+        .items.filter((project) => project.org_slug === orgSlug)
+    : []
+
+  return { me, projects }
 }
 
 interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
   orgSlug: string
 }
 
-export function AppSidebar({ orgSlug, ...props }: AppSidebarProps) {
+export async function AppSidebar({ orgSlug, ...props }: AppSidebarProps) {
+  const { me, projects: sidebarProjects } = await fetchSidebarData(orgSlug)
   const navItems = getNavItems(orgSlug)
-  const projects = getProjects(orgSlug)
+
+  const organizations =
+    me?.organizations.map((org) => ({
+      id: org.id,
+      name: org.name,
+      slug: org.slug,
+      role: org.role,
+      logo: <Building2 className="size-4" />,
+    })) ?? []
+
+  const projects = sidebarProjects.map((project) => ({
+    name: project.name,
+    key: project.project_key,
+    url: `/${project.org_slug}/projects/${project.project_key}`,
+    icon: <Boxes className="size-4" />,
+    openIssueCount: project.issue_count,
+  }))
+
+  const user = me
+    ? {
+        name: me.name,
+        email: me.email,
+        avatar: "",
+      }
+    : {
+        name: "Unknown user",
+        email: "",
+        avatar: "",
+      }
 
   return (
     <Sidebar collapsible="icon" {...props}>
       <SidebarHeader>
         <OrganizationSwitcher
-          organizations={staticData.organizations}
+          organizations={organizations}
           currentOrgSlug={orgSlug}
         />
       </SidebarHeader>
@@ -126,7 +137,7 @@ export function AppSidebar({ orgSlug, ...props }: AppSidebarProps) {
         <NavProjects projects={projects} />
       </SidebarContent>
       <SidebarFooter>
-        <NavUser user={staticData.user} />
+        <NavUser user={user} />
       </SidebarFooter>
       <SidebarRail />
     </Sidebar>
