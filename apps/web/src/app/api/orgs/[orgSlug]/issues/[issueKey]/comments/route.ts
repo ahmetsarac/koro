@@ -10,9 +10,7 @@ export async function GET(
   try {
     const { orgSlug, issueKey } = await params
 
-    const apiUrl = new URL(
-      `${getApiBaseUrl()}/orgs/${orgSlug}/issues/${issueKey}`
-    )
+    const apiUrl = `${getApiBaseUrl()}/orgs/${orgSlug}/issues/${issueKey}/comments`
 
     const accessToken = request.cookies.get(ACCESS_TOKEN_COOKIE_NAME)?.value
     const headers: HeadersInit = {}
@@ -35,23 +33,22 @@ export async function GET(
       },
     })
   } catch (error) {
-    console.error("Failed to proxy issue request", error)
-
+    console.error("Failed to fetch comments", error)
     return NextResponse.json(
-      { message: "Issue request failed." },
+      { message: "Failed to fetch comments" },
       { status: 500 }
     )
   }
 }
 
-export async function PATCH(
+export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ orgSlug: string; issueKey: string }> }
 ) {
   try {
     const { orgSlug, issueKey } = await params
 
-    const apiUrl = `${getApiBaseUrl()}/orgs/${orgSlug}/issues/${issueKey}`
+    const apiUrl = `${getApiBaseUrl()}/orgs/${orgSlug}/issues/${issueKey}/comments`
 
     const accessToken = request.cookies.get(ACCESS_TOKEN_COOKIE_NAME)?.value
     const headers: HeadersInit = {
@@ -64,7 +61,7 @@ export async function PATCH(
     const reqBody = await request.json()
 
     const response = await fetch(apiUrl, {
-      method: "PATCH",
+      method: "POST",
       cache: "no-store",
       headers,
       body: JSON.stringify(reqBody),
@@ -80,10 +77,9 @@ export async function PATCH(
       },
     })
   } catch (error) {
-    console.error("Failed to update issue", error)
-
+    console.error("Failed to create comment", error)
     return NextResponse.json(
-      { message: "Failed to update issue" },
+      { message: "Failed to create comment" },
       { status: 500 }
     )
   }

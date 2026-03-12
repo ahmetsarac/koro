@@ -1057,6 +1057,122 @@ pub async fn update_issue_status(
         .into_response()
 }
 
+#[derive(serde::Deserialize)]
+pub struct UpdateIssueRequest {
+    pub title: Option<String>,
+    pub description: Option<String>,
+}
+
+#[derive(serde::Serialize)]
+pub struct UpdateIssueResponse {
+    pub issue_id: uuid::Uuid,
+    pub title: String,
+    pub description: Option<String>,
+}
+
+pub async fn update_issue(
+    Path((org_slug, issue_key)): Path<(String, String)>,
+    State(state): State<AppState>,
+    AuthUser(user_id): AuthUser,
+    Json(req): Json<UpdateIssueRequest>,
+) -> impl IntoResponse {
+    // Parse issue key (e.g., "APP-123")
+    let (project_key, key_seq) = match issue_key.split_once('-') {
+        Some((pk, seq_str)) => match seq_str.parse::<i32>() {
+            Ok(seq) => (pk, seq),
+            Err(_) => return (StatusCode::BAD_REQUEST, "invalid issue key").into_response(),
+        },
+        None => return (StatusCode::BAD_REQUEST, "invalid issue key").into_response(),
+    };
+
+    // Resolve org
+    let org_id = match sqlx::query_scalar::<_, uuid::Uuid>(
+        r#"SELECT id FROM organizations WHERE slug = $1"#,
+    )
+    .bind(&org_slug)
+    .fetch_optional(&state.db)
+    .await
+    {
+        Ok(Some(id)) => id,
+        Ok(None) => return StatusCode::NOT_FOUND.into_response(),
+        Err(e) => {
+            eprintln!("update_issue org resolve error: {e:?}");
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
+    };
+
+    // Resolve issue
+    let issue_row = match sqlx::query!(
+        r#"
+        SELECT i.id as issue_id, i.project_id, i.title, i.description
+        FROM issues i
+        JOIN projects p ON p.id = i.project_id
+        WHERE p.org_id = $1 AND p.project_key = $2 AND i.key_seq = $3
+        "#,
+        org_id,
+        project_key,
+        key_seq
+    )
+    .fetch_optional(&state.db)
+    .await
+    {
+        Ok(Some(r)) => r,
+        Ok(None) => return StatusCode::NOT_FOUND.into_response(),
+        Err(e) => {
+            eprintln!("update_issue issue resolve error: {e:?}");
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
+    };
+
+    // Check project membership
+    let is_member = match sqlx::query_scalar::<_, i32>(
+        r#"SELECT 1 FROM project_members WHERE project_id = $1 AND user_id = $2"#,
+    )
+    .bind(issue_row.project_id)
+    .bind(user_id)
+    .fetch_optional(&state.db)
+    .await
+    {
+        Ok(Some(_)) => true,
+        Ok(None) => false,
+        Err(e) => {
+            eprintln!("update_issue member check error: {e:?}");
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
+    };
+
+    if !is_member {
+        return StatusCode::FORBIDDEN.into_response();
+    }
+
+    // Update issue
+    let new_title = req.title.unwrap_or(issue_row.title);
+    let new_description = req.description.or(issue_row.description);
+
+    if let Err(e) = sqlx::query!(
+        r#"UPDATE issues SET title = $1, description = $2 WHERE id = $3"#,
+        new_title,
+        new_description,
+        issue_row.issue_id
+    )
+    .execute(&state.db)
+    .await
+    {
+        eprintln!("update_issue update error: {e:?}");
+        return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+    }
+
+    (
+        StatusCode::OK,
+        Json(UpdateIssueResponse {
+            issue_id: issue_row.issue_id,
+            title: new_title,
+            description: new_description,
+        }),
+    )
+        .into_response()
+}
+
 #[derive(serde::Serialize)]
 pub struct BoardResponse {
     pub columns: BTreeMap<String, Vec<IssueListItem>>,

@@ -223,15 +223,17 @@ const COL_WIDTHS = {
   status: 140,
 }
 
+import {
+  projectIssuesCache,
+  type ProjectIssuesScrollState,
+} from "@/lib/cache/issues-cache"
+
 interface IssuesScrollState {
   scrollTop: number
   items: IssueListItem[]
   total: number
   hasMore: boolean
 }
-
-// In-memory cache - sayfa yenilendiğinde temizlenir, client-side navigasyonda persist eder
-const issuesScrollCache = new Map<string, IssuesScrollState>()
 
 function getIssuesCacheKey(orgSlug: string, projectKey: string): string {
   return `${orgSlug}-${projectKey}`
@@ -242,14 +244,19 @@ function saveIssuesScrollState(
   projectKey: string,
   state: IssuesScrollState
 ): void {
-  issuesScrollCache.set(getIssuesCacheKey(orgSlug, projectKey), state)
+  projectIssuesCache.set(
+    getIssuesCacheKey(orgSlug, projectKey),
+    state as ProjectIssuesScrollState
+  )
 }
 
 function loadIssuesScrollState(
   orgSlug: string,
   projectKey: string
 ): IssuesScrollState | null {
-  return issuesScrollCache.get(getIssuesCacheKey(orgSlug, projectKey)) ?? null
+  return projectIssuesCache.get(
+    getIssuesCacheKey(orgSlug, projectKey)
+  ) as IssuesScrollState | null ?? null
 }
 
 function ProjectIssuesTab({

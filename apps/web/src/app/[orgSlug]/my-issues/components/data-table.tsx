@@ -31,6 +31,7 @@ import {
 import { type IssueFacets, type Issue } from "../data/schema"
 import { DataTableSelectionOverlay } from "./data-table-selection-overlay"
 import { RotateCw } from "lucide-react"
+import { myIssuesCache, type MyIssuesScrollState } from "@/lib/cache/issues-cache"
 
 const ROW_HEIGHT = 49
 const OVERSCAN = 2
@@ -46,19 +47,16 @@ interface ScrollState {
   facets: IssueFacets | null
 }
 
-// In-memory cache - sayfa yenilendiğinde temizlenir, client-side navigasyonda persist eder
-const scrollCache = new Map<IssueFilterType, ScrollState>()
-
 function saveScrollState(filterType: IssueFilterType, state: ScrollState): void {
-  scrollCache.set(filterType, state)
+  myIssuesCache.set(filterType, state as MyIssuesScrollState)
 }
 
 function loadScrollState(filterType: IssueFilterType): ScrollState | null {
-  return scrollCache.get(filterType) ?? null
+  return myIssuesCache.get(filterType) as ScrollState | null ?? null
 }
 
 function clearScrollState(filterType: IssueFilterType): void {
-  scrollCache.delete(filterType)
+  myIssuesCache.delete(filterType)
 }
 
 /** Kolon id → backend sort_by. Backend: created_at | updated_at | key_seq | title | status | priority */

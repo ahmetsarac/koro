@@ -29,6 +29,7 @@ pub struct CreateCommentResponse {
 pub struct CommentItem {
     pub comment_id: uuid::Uuid,
     pub author_id: Option<uuid::Uuid>,
+    pub author_name: Option<String>,
     pub body: String,
     pub created_at: chrono::DateTime<chrono::Utc>,
 }
@@ -233,10 +234,11 @@ pub async fn list_comments(
 
     let rows = match sqlx::query!(
         r#"
-        SELECT id, author_id, body, created_at
-        FROM comments
-        WHERE issue_id = $1
-        ORDER BY created_at ASC
+        SELECT c.id, c.author_id, u.name as author_name, c.body, c.created_at
+        FROM comments c
+        LEFT JOIN users u ON u.id = c.author_id
+        WHERE c.issue_id = $1
+        ORDER BY c.created_at ASC
         "#,
         issue_row.issue_id
     )
@@ -255,6 +257,7 @@ pub async fn list_comments(
         .map(|r| CommentItem {
             comment_id: r.id,
             author_id: r.author_id,
+            author_name: Some(r.author_name),
             body: r.body,
             created_at: r.created_at,
         })

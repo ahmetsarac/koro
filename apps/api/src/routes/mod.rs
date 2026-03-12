@@ -62,7 +62,7 @@ pub fn router(state: AppState) -> Router {
         .route("/issues/{issueId}", get(issues::get_issue))
         .route(
             "/orgs/{orgSlug}/issues/{issueKey}",
-            get(issues::get_issue_by_key),
+            get(issues::get_issue_by_key).patch(issues::update_issue),
         )
         .route(
             "/orgs/{orgSlug}/issues/{issueKey}/relations",
