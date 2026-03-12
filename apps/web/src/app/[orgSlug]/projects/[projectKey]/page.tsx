@@ -223,6 +223,35 @@ const COL_WIDTHS = {
   status: 140,
 }
 
+interface IssuesScrollState {
+  scrollTop: number
+  items: IssueListItem[]
+  total: number
+  hasMore: boolean
+}
+
+// In-memory cache - sayfa yenilendiğinde temizlenir, client-side navigasyonda persist eder
+const issuesScrollCache = new Map<string, IssuesScrollState>()
+
+function getIssuesCacheKey(orgSlug: string, projectKey: string): string {
+  return `${orgSlug}-${projectKey}`
+}
+
+function saveIssuesScrollState(
+  orgSlug: string,
+  projectKey: string,
+  state: IssuesScrollState
+): void {
+  issuesScrollCache.set(getIssuesCacheKey(orgSlug, projectKey), state)
+}
+
+function loadIssuesScrollState(
+  orgSlug: string,
+  projectKey: string
+): IssuesScrollState | null {
+  return issuesScrollCache.get(getIssuesCacheKey(orgSlug, projectKey)) ?? null
+}
+
 function ProjectIssuesTab({
   orgSlug,
   projectKey,
@@ -240,6 +269,8 @@ function ProjectIssuesTab({
   const [scrollTop, setScrollTop] = React.useState(0)
   const [containerHeight, setContainerHeight] = React.useState(0)
   const scrollContainerRef = React.useRef<HTMLDivElement>(null)
+  const hasRestoredFromCacheRef = React.useRef(false)
+  const pendingScrollTopRef = React.useRef<number | null>(null)
 
   const fetchIssues = React.useCallback(
     async (offset: number) => {
@@ -260,10 +291,29 @@ function ProjectIssuesTab({
     [orgSlug, projectKey]
   )
 
+  // İlk yükleme: cache'den restore et veya API'den yükle
   React.useEffect(() => {
+    // Cache'den restore edildiyse Strict Mode ikinci çalışmasında hiçbir şey yapma
+    if (hasRestoredFromCacheRef.current) {
+      return
+    }
+
     let cancelled = false
 
-    async function loadInitial() {
+    async function init() {
+      // Cache'den restore dene
+      const savedState = loadIssuesScrollState(orgSlug, projectKey)
+      if (savedState && savedState.items.length > 0) {
+        hasRestoredFromCacheRef.current = true
+        setItems(savedState.items)
+        setTotal(savedState.total)
+        setHasMore(savedState.hasMore)
+        setIsInitialLoading(false)
+        pendingScrollTopRef.current = savedState.scrollTop
+        return
+      }
+
+      // Cache yoksa API'den yükle
       try {
         setIsInitialLoading(true)
         setError(null)
@@ -285,11 +335,39 @@ function ProjectIssuesTab({
       }
     }
 
-    loadInitial()
+    init()
     return () => {
       cancelled = true
     }
-  }, [fetchIssues])
+  }, [fetchIssues, orgSlug, projectKey])
+
+  // Scroll pozisyonunu restore et
+  React.useEffect(() => {
+    if (
+      pendingScrollTopRef.current !== null &&
+      !isInitialLoading &&
+      items.length > 0
+    ) {
+      const scrollTopValue = pendingScrollTopRef.current
+      pendingScrollTopRef.current = null
+      requestAnimationFrame(() => {
+        scrollContainerRef.current?.scrollTo({ top: scrollTopValue })
+        setScrollTop(scrollTopValue)
+      })
+    }
+  }, [isInitialLoading, items.length])
+
+  // State'i sessionStorage'a kaydet
+  React.useEffect(() => {
+    if (items.length > 0 && !isInitialLoading) {
+      saveIssuesScrollState(orgSlug, projectKey, {
+        scrollTop,
+        items,
+        total,
+        hasMore,
+      })
+    }
+  }, [scrollTop, items, total, hasMore, orgSlug, projectKey, isInitialLoading])
 
   React.useLayoutEffect(() => {
     const container = scrollContainerRef.current
@@ -392,9 +470,9 @@ function ProjectIssuesTab({
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-2">
-      <div className="relative flex min-h-0 flex-1 flex-col rounded-md border overflow-hidden">
-        <table className="w-full text-sm" style={{ tableLayout: "fixed" }}>
+    <div className="flex min-h-0 flex-1 flex-col gap-4">
+      <div className="relative flex max-h-full min-h-0 flex-1 flex-col rounded-md border overflow-hidden">
+        <table className="w-full text-xs" style={{ tableLayout: "fixed" }}>
           {colGroup}
           <TableHeader>
             <TableRow className="border-none">
@@ -416,7 +494,7 @@ function ProjectIssuesTab({
           className="relative flex-1 overflow-y-auto min-h-0"
           onScroll={handleScroll}
         >
-          <table className="w-full text-sm" style={{ tableLayout: "fixed" }}>
+          <table className="w-full text-xs" style={{ tableLayout: "fixed" }}>
             {colGroup}
             <TableBody>
               {topSpacerHeight > 0 && (
@@ -749,7 +827,7 @@ function ProjectBoardTab({
             <span className="font-mono text-xs text-muted-foreground">
               {activeIssue.display_key}
             </span>
-            <p className="text-sm font-medium leading-tight line-clamp-2 mt-1">
+            <p className="text-xs font-medium leading-tight line-clamp-2 mt-1">
               {activeIssue.title}
             </p>
           </div>
@@ -781,7 +859,7 @@ function BoardColumn({
     <div className="flex w-72 shrink-0 flex-col rounded-lg border bg-muted/30">
       <div className="flex items-center gap-2 p-3 border-b bg-background rounded-t-lg">
         <ColIcon className="h-4 w-4 text-muted-foreground" />
-        <span className="font-medium text-sm">{label}</span>
+        <span className="font-medium text-xs">{label}</span>
         <span className="ml-auto text-xs text-muted-foreground">
           {issues.length}
         </span>
@@ -866,7 +944,7 @@ function SortableBoardCard({
         <span className="font-mono text-xs text-muted-foreground">
           {issue.display_key}
         </span>
-        <p className="text-sm font-medium leading-tight line-clamp-2">
+        <p className="text-xs font-medium leading-tight line-clamp-2">
           {issue.title}
         </p>
       </Link>

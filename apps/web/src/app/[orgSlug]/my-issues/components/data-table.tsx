@@ -36,7 +36,6 @@ const ROW_HEIGHT = 49
 const OVERSCAN = 2
 const PAGE_SIZE = 50
 const LOAD_MORE_THRESHOLD = 300
-const STORAGE_KEY_PREFIX = "my-issues-scroll"
 
 interface ScrollState {
   scrollTop: number
@@ -47,36 +46,19 @@ interface ScrollState {
   facets: IssueFacets | null
 }
 
-function getStorageKey(filterType: IssueFilterType): string {
-  return `${STORAGE_KEY_PREFIX}-${filterType}`
-}
+// In-memory cache - sayfa yenilendiğinde temizlenir, client-side navigasyonda persist eder
+const scrollCache = new Map<IssueFilterType, ScrollState>()
 
 function saveScrollState(filterType: IssueFilterType, state: ScrollState): void {
-  try {
-    sessionStorage.setItem(getStorageKey(filterType), JSON.stringify(state))
-  } catch {
-    // Storage full or unavailable
-  }
+  scrollCache.set(filterType, state)
 }
 
 function loadScrollState(filterType: IssueFilterType): ScrollState | null {
-  try {
-    const saved = sessionStorage.getItem(getStorageKey(filterType))
-    if (saved) {
-      return JSON.parse(saved) as ScrollState
-    }
-  } catch {
-    // Parse error or unavailable
-  }
-  return null
+  return scrollCache.get(filterType) ?? null
 }
 
 function clearScrollState(filterType: IssueFilterType): void {
-  try {
-    sessionStorage.removeItem(getStorageKey(filterType))
-  } catch {
-    // Unavailable
-  }
+  scrollCache.delete(filterType)
 }
 
 /** Kolon id → backend sort_by. Backend: created_at | updated_at | key_seq | title | status | priority */
@@ -146,41 +128,40 @@ export function DataTable({ columns, filterType }: DataTableProps) {
   const [facets, setFacets] = React.useState<IssueFacets | null>(null)
 
   const scrollContainerRef = React.useRef<HTMLDivElement>(null)
-  const hasRestoredRef = React.useRef(false)
+  const hasRestoredFromCacheRef = React.useRef(false)
   const pendingScrollTopRef = React.useRef<number | null>(null)
 
   // İlk yükleme: cache'den restore et veya API'den yükle
   React.useEffect(() => {
-    // Zaten restore edilmişse bir şey yapma (Strict Mode için)
-    if (hasRestoredRef.current) {
-      return
-    }
-    hasRestoredRef.current = true
-
-    // Cache'den restore dene
-    const savedState = loadScrollState(filterType)
-    if (savedState && savedState.items.length > 0) {
-      setItems(savedState.items)
-      setNextCursor(savedState.nextCursor)
-      setTotal(savedState.total)
-      setHasMore(savedState.hasMore)
-      setFacets(savedState.facets)
-      setIsInitialLoading(false)
-      pendingScrollTopRef.current = savedState.scrollTop
+    // Cache'den restore edildiyse Strict Mode ikinci çalışmasında hiçbir şey yapma
+    if (hasRestoredFromCacheRef.current) {
       return
     }
 
-    // Cache yoksa API'den yükle
     let cancelled = false
 
-    setItems([])
-    setNextCursor(null)
-    setHasMore(true)
+    async function init() {
+      // Cache'den restore dene
+      const savedState = loadScrollState(filterType)
+      if (savedState && savedState.items.length > 0) {
+        hasRestoredFromCacheRef.current = true
+        setItems(savedState.items)
+        setNextCursor(savedState.nextCursor)
+        setTotal(savedState.total)
+        setHasMore(savedState.hasMore)
+        setFacets(savedState.facets)
+        setIsInitialLoading(false)
+        pendingScrollTopRef.current = savedState.scrollTop
+        return
+      }
 
-    async function loadInitial() {
+      // Cache yoksa API'den yükle
       try {
         setIsInitialLoading(true)
         setError(null)
+        setItems([])
+        setNextCursor(null)
+        setHasMore(true)
 
         const params = buildFetchParams(sorting, columnFilters, null, filterType)
         const res = await fetchMyIssues(params)
@@ -203,7 +184,7 @@ export function DataTable({ columns, filterType }: DataTableProps) {
       }
     }
 
-    loadInitial()
+    init()
     return () => {
       cancelled = true
     }
