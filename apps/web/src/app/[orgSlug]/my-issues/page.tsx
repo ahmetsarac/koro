@@ -6,5 +6,5 @@ export default async function MyIssuesPage({
   params: Promise<{ orgSlug: string }>
 }) {
   const { orgSlug } = await params
-  redirect(`/org/${orgSlug}/my-issues/assigned`)
+  redirect(`/${orgSlug}/my-issues/assigned`)
 }

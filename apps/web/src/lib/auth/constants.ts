@@ -1,4 +1,4 @@
-export const DEFAULT_ORG_HOME = "/org/acme/my-issues";
+export const DEFAULT_ORG_HOME = "/acme/my-issues";
 
 export const ACCESS_TOKEN_COOKIE_NAME = "koro_access_token";
 export const REFRESH_TOKEN_COOKIE_NAME = "koro_refresh_token";

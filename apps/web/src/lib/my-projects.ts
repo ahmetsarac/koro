@@ -1,7 +1,7 @@
 import {
   projectListResponseSchema,
   type ProjectListResponse,
-} from "@/app/org/[orgSlug]/projects/data/schema"
+} from "@/app/[orgSlug]/projects/data/schema"
 
 export type FetchMyProjectsParams = {
   limit?: number

@@ -18,7 +18,7 @@ export const columns: ColumnDef<Project>[] = [
     ),
     cell: ({ row }) => (
       <Link
-        href={`/org/${row.original.org_slug}/projects/${row.original.project_key}`}
+        href={`/${row.original.org_slug}/projects/${row.original.project_key}`}
         className="flex items-center gap-2 font-mono text-xs hover:underline"
       >
         <FolderKanban className="size-4 text-muted-foreground" />
@@ -36,7 +36,7 @@ export const columns: ColumnDef<Project>[] = [
     ),
     cell: ({ row }) => (
       <Link
-        href={`/org/${row.original.org_slug}/projects/${row.original.project_key}`}
+        href={`/${row.original.org_slug}/projects/${row.original.project_key}`}
         className="max-w-[400px] truncate font-medium hover:underline"
       >
         {row.getValue("name")}

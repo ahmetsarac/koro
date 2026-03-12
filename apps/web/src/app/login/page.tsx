@@ -10,7 +10,7 @@ function getSafeNextPath(next: string | string[] | undefined) {
   const value = Array.isArray(next) ? next[0] : next;
 
   if (!value || !value.startsWith("/") || value.startsWith("//")) {
-    return "/org/acme/my-issues";
+    return "/acme/my-issues";
   }
 
   return value;

@@ -15,7 +15,7 @@ import {
 
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { projectRoles } from "@/app/org/[orgSlug]/projects/data/data"
+import { projectRoles } from "@/app/[orgSlug]/projects/data/data"
 import { Skeleton } from "@/components/ui/skeleton"
 
 interface Project {
@@ -96,7 +96,7 @@ export default function ProjectDetailPage({
           <h2 className="text-lg font-semibold text-destructive">Error</h2>
           <p className="text-muted-foreground">{error || "Project not found"}</p>
           <Button asChild className="mt-4">
-            <Link href={`/org/${orgSlug}/projects`}>Back to Projects</Link>
+            <Link href={`/${orgSlug}/projects`}>Back to Projects</Link>
           </Button>
         </div>
       </div>
@@ -109,7 +109,7 @@ export default function ProjectDetailPage({
     <div className="flex flex-col gap-4">
       <div className="flex items-center gap-2 text-sm text-muted-foreground">
         <Link
-          href={`/org/${orgSlug}/projects`}
+          href={`/${orgSlug}/projects`}
           className="hover:text-foreground transition-colors"
         >
           Projects

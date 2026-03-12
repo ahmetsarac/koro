@@ -24,20 +24,15 @@ export function OrgBreadcrumb() {
   const pathname = usePathname()
   const segments = pathname.split("/").filter(Boolean)
 
-  const orgIndex = segments.indexOf("org")
-  if (orgIndex === -1 || orgIndex + 1 >= segments.length) {
+  if (segments.length < 2) {
     return null
   }
 
-  const orgSlug = segments[orgIndex + 1]
-  const pathSegments = segments.slice(orgIndex + 2)
-
-  if (pathSegments.length === 0) {
-    return null
-  }
+  const orgSlug = segments[0]
+  const pathSegments = segments.slice(1)
 
   const breadcrumbs: { label: string; href: string; isLast: boolean }[] = []
-  let currentPath = `/org/${orgSlug}`
+  let currentPath = `/${orgSlug}`
 
   pathSegments.forEach((segment, index) => {
     currentPath += `/${segment}`

@@ -43,7 +43,7 @@ export function OrganizationSwitcher({
   }
 
   function handleOrgSwitch(org: Organization) {
-    router.push(`/org/${org.slug}/my-issues`)
+    router.push(`/${org.slug}/my-issues`)
   }
 
   return (

@@ -16,10 +16,10 @@ export function MyIssuesTabs() {
     <Tabs value={activeTab}>
       <TabsList className="w-fit">
         <TabsTrigger value="assigned" asChild>
-          <Link href={`/org/${orgSlug}/my-issues/assigned`}>Assigned to me</Link>
+          <Link href={`/${orgSlug}/my-issues/assigned`}>Assigned to me</Link>
         </TabsTrigger>
         <TabsTrigger value="created" asChild>
-          <Link href={`/org/${orgSlug}/my-issues/created`}>Created by me</Link>
+          <Link href={`/${orgSlug}/my-issues/created`}>Created by me</Link>
         </TabsTrigger>
       </TabsList>
     </Tabs>

@@ -1,7 +1,7 @@
 import {
   issueListResponseSchema,
   type IssueListResponse,
-} from "@/app/org/[orgSlug]/my-issues/data/schema"
+} from "@/app/[orgSlug]/my-issues/data/schema"
 
 export type IssueSortBy =
   | "created_at"

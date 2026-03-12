@@ -58,22 +58,22 @@ function getNavItems(orgSlug: string) {
   return [
     {
       title: "My Issues",
-      url: `/org/${orgSlug}/my-issues`,
+      url: `/${orgSlug}/my-issues`,
       icon: <Crosshair />,
     },
     {
       title: "Projects",
-      url: `/org/${orgSlug}/projects`,
+      url: `/${orgSlug}/projects`,
       icon: <Boxes />,
     },
     {
       title: "Activity",
-      url: `/org/${orgSlug}/activity`,
+      url: `/${orgSlug}/activity`,
       icon: <BookOpenIcon />,
     },
     {
       title: "Settings",
-      url: `/org/${orgSlug}/settings`,
+      url: `/${orgSlug}/settings`,
       icon: <Settings />,
     },
   ]
@@ -84,21 +84,21 @@ function getProjects(orgSlug: string) {
     {
       name: "Core Platform",
       key: "KORO",
-      url: `/org/${orgSlug}/projects/KORO`,
+      url: `/${orgSlug}/projects/KORO`,
       icon: <BlocksIcon />,
       openIssueCount: 24,
     },
     {
       name: "Authentication",
       key: "AUTH",
-      url: `/org/${orgSlug}/projects/AUTH`,
+      url: `/${orgSlug}/projects/AUTH`,
       icon: <KeyRoundIcon />,
       openIssueCount: 9,
     },
     {
       name: "Workflow Engine",
       key: "FLOW",
-      url: `/org/${orgSlug}/projects/FLOW`,
+      url: `/${orgSlug}/projects/FLOW`,
       icon: <WorkflowIcon />,
       openIssueCount: 13,
     },
