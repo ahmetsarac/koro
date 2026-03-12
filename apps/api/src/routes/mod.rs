@@ -43,8 +43,20 @@ pub fn router(state: AppState) -> Router {
             get(projects::list_project_members),
         )
         .route(
+            "/orgs/{orgSlug}/projects/{projectKey}/issues",
+            get(issues::list_project_issues_by_key),
+        )
+        .route(
+            "/orgs/{orgSlug}/projects/{projectKey}/board",
+            get(issues::get_board_by_key),
+        )
+        .route(
             "/issues/{issueId}/status",
             patch(issues::update_issue_status),
+        )
+        .route(
+            "/issues/{issueId}/board-position",
+            patch(issues::update_issue_board_position),
         )
         .route("/projects/{projectId}/board", get(issues::get_board))
         .route("/issues/{issueId}", get(issues::get_issue))

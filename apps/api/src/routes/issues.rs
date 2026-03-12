@@ -185,6 +185,15 @@ pub struct ListIssuesResponse {
     pub items: Vec<IssueListItem>,
 }
 
+#[derive(Serialize)]
+pub struct ListProjectIssuesResponse {
+    pub items: Vec<IssueListItem>,
+    pub total: i64,
+    pub limit: i64,
+    pub offset: i64,
+    pub has_more: bool,
+}
+
 #[derive(Debug, Clone, Copy, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum MyIssueSortBy {
@@ -802,6 +811,170 @@ pub async fn list_issues(
     (StatusCode::OK, Json(ListIssuesResponse { items })).into_response()
 }
 
+pub async fn list_project_issues_by_key(
+    Path((org_slug, project_key)): Path<(String, String)>,
+    State(state): State<AppState>,
+    AuthUser(user_id): AuthUser,
+    Query(q): Query<HashMap<String, String>>,
+) -> impl IntoResponse {
+    // Find project by org_slug and project_key
+    let project = match sqlx::query!(
+        r#"
+        SELECT p.id, p.project_key
+        FROM projects p
+        JOIN organizations o ON o.id = p.org_id
+        WHERE o.slug = $1 AND p.project_key = $2
+        "#,
+        org_slug,
+        project_key
+    )
+    .fetch_optional(&state.db)
+    .await
+    {
+        Ok(Some(p)) => p,
+        Ok(None) => return StatusCode::NOT_FOUND.into_response(),
+        Err(e) => {
+            eprintln!("list_project_issues_by_key project lookup error: {e:?}");
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
+    };
+
+    let project_id = project.id;
+
+    // project member check
+    let is_member = match sqlx::query_scalar::<_, i32>(
+        r#"
+        SELECT 1
+        FROM project_members
+        WHERE project_id = $1 AND user_id = $2
+        "#,
+    )
+    .bind(project_id)
+    .bind(user_id)
+    .fetch_optional(&state.db)
+    .await
+    {
+        Ok(Some(_)) => true,
+        Ok(None) => false,
+        Err(e) => {
+            eprintln!("list_project_issues_by_key member check error: {e:?}");
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
+    };
+
+    if !is_member {
+        return StatusCode::FORBIDDEN.into_response();
+    }
+
+    let status_filter: Option<String> = q.get("status").cloned();
+    let q_filter: Option<String> = q.get("q").cloned();
+
+    let assignee_filter: Option<uuid::Uuid> = match q.get("assignee").map(|s| s.as_str()) {
+        Some("me") => Some(user_id),
+        Some(raw) => raw.parse::<uuid::Uuid>().ok(),
+        None => None,
+    };
+
+    let limit: i64 = q
+        .get("limit")
+        .and_then(|v| v.parse::<i64>().ok())
+        .unwrap_or(50)
+        .clamp(1, 200);
+
+    let offset: i64 = q
+        .get("offset")
+        .and_then(|v| v.parse::<i64>().ok())
+        .unwrap_or(0)
+        .max(0);
+
+    // Get total count
+    let total: i64 = match sqlx::query_scalar!(
+        r#"
+        SELECT COUNT(*) as "count!"
+        FROM issues
+        WHERE project_id = $1
+            AND ($2::text IS NULL OR status = $2)
+            AND ($3::uuid IS NULL OR assignee_id = $3)
+            AND (
+                $4::text IS NULL
+                OR title ILIKE '%' || $4 || '%'
+                OR COALESCE(description, '') ILIKE '%' || $4 || '%'
+            )
+        "#,
+        project_id,
+        status_filter.clone(),
+        assignee_filter,
+        q_filter.clone(),
+    )
+    .fetch_one(&state.db)
+    .await
+    {
+        Ok(c) => c,
+        Err(e) => {
+            eprintln!("list_project_issues_by_key count error: {e:?}");
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
+    };
+
+    let rows = match sqlx::query!(
+        r#"
+        SELECT id, key_seq, title, status
+        FROM issues
+        WHERE project_id = $1
+            AND ($2::text IS NULL OR status = $2)
+            AND ($3::uuid IS NULL OR assignee_id = $3)
+            AND (
+                $4::text IS NULL
+                OR title ILIKE '%' || $4 || '%'
+                OR COALESCE(description, '') ILIKE '%' || $4 || '%'
+            )
+        ORDER BY key_seq DESC
+        LIMIT $5
+        OFFSET $6
+        "#,
+        project_id,
+        status_filter,
+        assignee_filter,
+        q_filter,
+        limit,
+        offset
+    )
+    .fetch_all(&state.db)
+    .await
+    {
+        Ok(r) => r,
+        Err(e) => {
+            eprintln!("list_project_issues_by_key query error: {e:?}");
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
+    };
+
+    let items: Vec<IssueListItem> = rows
+        .into_iter()
+        .map(|r| IssueListItem {
+            issue_id: r.id,
+            display_key: format!("{}-{}", project.project_key, r.key_seq),
+            title: r.title,
+            status: r.status,
+        })
+        .collect();
+
+    let fetched = items.len() as i64;
+    let has_more = offset + fetched < total;
+
+    (
+        StatusCode::OK,
+        Json(ListProjectIssuesResponse {
+            items,
+            total,
+            limit,
+            offset,
+            has_more,
+        }),
+    )
+        .into_response()
+}
+
 #[derive(serde::Deserialize)]
 pub struct UpdateIssueStatusRequest {
     pub status: String,
@@ -968,6 +1141,179 @@ pub async fn get_board(
     }
 
     (StatusCode::OK, Json(BoardResponse { columns })).into_response()
+}
+
+pub async fn get_board_by_key(
+    Path((org_slug, project_key)): Path<(String, String)>,
+    State(state): State<AppState>,
+    AuthUser(user_id): AuthUser,
+) -> impl IntoResponse {
+    // Find project by org_slug and project_key
+    let project = match sqlx::query!(
+        r#"
+        SELECT p.id, p.project_key
+        FROM projects p
+        JOIN organizations o ON o.id = p.org_id
+        WHERE o.slug = $1 AND p.project_key = $2
+        "#,
+        org_slug,
+        project_key
+    )
+    .fetch_optional(&state.db)
+    .await
+    {
+        Ok(Some(p)) => p,
+        Ok(None) => return StatusCode::NOT_FOUND.into_response(),
+        Err(e) => {
+            eprintln!("get_board_by_key project lookup error: {e:?}");
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
+    };
+
+    let project_id = project.id;
+
+    // member check
+    let is_member = match sqlx::query_scalar::<_, i32>(
+        r#"SELECT 1 FROM project_members WHERE project_id = $1 AND user_id = $2"#,
+    )
+    .bind(project_id)
+    .bind(user_id)
+    .fetch_optional(&state.db)
+    .await
+    {
+        Ok(Some(_)) => true,
+        Ok(None) => false,
+        Err(e) => {
+            eprintln!("get_board_by_key member check error: {e:?}");
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
+    };
+
+    if !is_member {
+        return StatusCode::FORBIDDEN.into_response();
+    }
+
+    // tüm issue'ları çek (board_order'a göre sırala)
+    let rows = match sqlx::query!(
+        r#"
+        SELECT id, key_seq, title, status
+        FROM issues
+        WHERE project_id = $1
+        ORDER BY board_order ASC, key_seq DESC
+        "#,
+        project_id
+    )
+    .fetch_all(&state.db)
+    .await
+    {
+        Ok(r) => r,
+        Err(e) => {
+            eprintln!("get_board_by_key query error: {e:?}");
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
+    };
+
+    // kolonları hazırla (boş da olsa dönsün)
+    let mut columns: BTreeMap<String, Vec<IssueListItem>> = BTreeMap::new();
+    for s in ["backlog", "todo", "in_progress", "done"] {
+        columns.insert(s.to_string(), Vec::new());
+    }
+
+    for r in rows {
+        let item = IssueListItem {
+            issue_id: r.id,
+            display_key: format!("{}-{}", project.project_key, r.key_seq),
+            title: r.title,
+            status: r.status.clone(),
+        };
+
+        columns.entry(r.status).or_default().push(item);
+    }
+
+    (StatusCode::OK, Json(BoardResponse { columns })).into_response()
+}
+
+#[derive(serde::Deserialize)]
+pub struct UpdateIssueBoardPositionRequest {
+    pub status: String,
+    pub position: i32,
+}
+
+pub async fn update_issue_board_position(
+    Path(issue_id): Path<uuid::Uuid>,
+    State(state): State<AppState>,
+    AuthUser(user_id): AuthUser,
+    Json(req): Json<UpdateIssueBoardPositionRequest>,
+) -> impl IntoResponse {
+    let allowed_statuses = ["backlog", "todo", "in_progress", "done"];
+    if !allowed_statuses.contains(&req.status.as_str()) {
+        return (StatusCode::BAD_REQUEST, "invalid status").into_response();
+    }
+
+    // Get issue and project_id
+    let issue_row = match sqlx::query!(
+        r#"SELECT project_id, status as old_status FROM issues WHERE id = $1"#,
+        issue_id
+    )
+    .fetch_optional(&state.db)
+    .await
+    {
+        Ok(Some(r)) => r,
+        Ok(None) => return StatusCode::NOT_FOUND.into_response(),
+        Err(e) => {
+            eprintln!("update_issue_board_position select issue error: {e:?}");
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
+    };
+
+    // member check
+    let is_member = match sqlx::query_scalar::<_, i32>(
+        r#"SELECT 1 FROM project_members WHERE project_id = $1 AND user_id = $2"#,
+    )
+    .bind(issue_row.project_id)
+    .bind(user_id)
+    .fetch_optional(&state.db)
+    .await
+    {
+        Ok(Some(_)) => true,
+        Ok(None) => false,
+        Err(e) => {
+            eprintln!("update_issue_board_position member check error: {e:?}");
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
+    };
+
+    if !is_member {
+        return StatusCode::FORBIDDEN.into_response();
+    }
+
+    // Update issue status and board_order
+    if let Err(e) = sqlx::query!(
+        r#"
+        UPDATE issues
+        SET status = $1, board_order = $2, updated_at = NOW()
+        WHERE id = $3
+        "#,
+        req.status,
+        req.position,
+        issue_id
+    )
+    .execute(&state.db)
+    .await
+    {
+        eprintln!("update_issue_board_position update error: {e:?}");
+        return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+    }
+
+    (
+        StatusCode::OK,
+        Json(serde_json::json!({
+            "issue_id": issue_id,
+            "status": req.status,
+            "position": req.position
+        })),
+    )
+        .into_response()
 }
 
 #[derive(serde::Serialize)]

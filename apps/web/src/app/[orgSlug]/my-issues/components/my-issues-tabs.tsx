@@ -8,9 +8,8 @@ export function MyIssuesTabs() {
   const pathname = usePathname()
   const activeTab = pathname.endsWith("/created") ? "created" : "assigned"
   
-  const segments = pathname.split("/")
-  const orgIndex = segments.indexOf("org")
-  const orgSlug = orgIndex !== -1 ? segments[orgIndex + 1] : ""
+  const segments = pathname.split("/").filter(Boolean)
+  const orgSlug = segments[0] || ""
 
   return (
     <Tabs value={activeTab}>
