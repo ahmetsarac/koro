@@ -1,13 +1,17 @@
-import { type Metadata } from "next"
+"use client"
 
-import { columns } from "../components/columns"
+import { use } from "react"
+
+import { createColumns } from "../components/columns"
 import { DataTable } from "../components/data-table"
 
-export const metadata: Metadata = {
-  title: "Assigned Issues",
-  description: "Issues assigned to you.",
-}
+export default function AssignedIssuesPage({
+  params,
+}: {
+  params: Promise<{ orgSlug: string }>
+}) {
+  const { orgSlug } = use(params)
+  const columns = createColumns(orgSlug)
 
-export default function AssignedIssuesPage() {
   return <DataTable columns={columns} filterType="assigned" />
 }

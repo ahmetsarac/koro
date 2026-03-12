@@ -178,10 +178,8 @@ export default function ProjectDetailPage({
           <ProjectBoardTab orgSlug={orgSlug} projectKey={projectKey} />
         </TabsContent>
 
-        <TabsContent value="members" className="mt-4">
-          <div className="text-center text-muted-foreground py-12 border rounded-md">
-            Members view coming soon...
-          </div>
+        <TabsContent value="members" className="mt-4 flex min-h-0 flex-1 flex-col">
+          <ProjectMembersTab orgSlug={orgSlug} projectKey={projectKey} />
         </TabsContent>
       </Tabs>
     </div>
@@ -810,6 +808,15 @@ function BoardColumn({
           )}
         </div>
       </SortableContext>
+
+      <div className="p-2">
+        <button
+          type="button"
+          className="flex w-full items-center justify-center rounded-md border border-dashed border-muted-foreground/30 py-2 text-muted-foreground hover:border-primary hover:text-primary hover:bg-primary/5 transition-colors"
+        >
+          <Plus className="h-4 w-4" />
+        </button>
+      </div>
     </div>
   )
 }
@@ -863,6 +870,202 @@ function SortableBoardCard({
           {issue.title}
         </p>
       </Link>
+    </div>
+  )
+}
+
+interface ProjectMember {
+  user_id: string
+  name: string
+  email: string
+  project_role: string
+}
+
+interface MembersResponse {
+  items: ProjectMember[]
+}
+
+const MEMBER_ROW_HEIGHT = 56
+const MEMBER_OVERSCAN = 2
+
+const roleLabels: Record<string, string> = {
+  owner: "Owner",
+  admin: "Admin",
+  member: "Member",
+  viewer: "Viewer",
+}
+
+function ProjectMembersTab({
+  orgSlug,
+  projectKey,
+}: {
+  orgSlug: string
+  projectKey: string
+}) {
+  const [members, setMembers] = React.useState<ProjectMember[]>([])
+  const [isLoading, setIsLoading] = React.useState(true)
+  const [error, setError] = React.useState<string | null>(null)
+
+  const [scrollTop, setScrollTop] = React.useState(0)
+  const [containerHeight, setContainerHeight] = React.useState(0)
+  const scrollContainerRef = React.useRef<HTMLDivElement>(null)
+
+  React.useEffect(() => {
+    async function loadMembers() {
+      try {
+        setIsLoading(true)
+        setError(null)
+
+        const response = await fetch(
+          `/api/orgs/${orgSlug}/projects/${projectKey}/members`,
+          {
+            cache: "no-store",
+            credentials: "same-origin",
+          }
+        )
+
+        if (!response.ok) {
+          throw new Error("Failed to fetch members")
+        }
+
+        const data: MembersResponse = await response.json()
+        setMembers(data.items || [])
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Failed to load members")
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    loadMembers()
+  }, [orgSlug, projectKey])
+
+  React.useLayoutEffect(() => {
+    const container = scrollContainerRef.current
+    if (!container) return
+
+    const updateHeight = () => setContainerHeight(container.clientHeight)
+    updateHeight()
+
+    const observer = new ResizeObserver(updateHeight)
+    observer.observe(container)
+    return () => observer.disconnect()
+  }, [])
+
+  const visibleCount =
+    containerHeight > 0 ? Math.ceil(containerHeight / MEMBER_ROW_HEIGHT) : 12
+
+  const startIndex = Math.max(
+    0,
+    Math.floor(scrollTop / MEMBER_ROW_HEIGHT) - MEMBER_OVERSCAN
+  )
+  const endIndex = Math.min(
+    members.length,
+    startIndex + visibleCount + MEMBER_OVERSCAN * 2
+  )
+
+  const visibleMembers = members.slice(startIndex, endIndex)
+  const topSpacerHeight = startIndex * MEMBER_ROW_HEIGHT
+  const bottomSpacerHeight = Math.max(
+    0,
+    (members.length - endIndex) * MEMBER_ROW_HEIGHT
+  )
+
+  const handleScroll = React.useCallback(
+    (event: React.UIEvent<HTMLDivElement>) => {
+      setScrollTop(event.currentTarget.scrollTop)
+    },
+    []
+  )
+
+  if (isLoading) {
+    return (
+      <div className="space-y-2">
+        {Array.from({ length: 5 }).map((_, i) => (
+          <Skeleton key={i} className="h-14 w-full" />
+        ))}
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="text-center text-destructive py-12 border rounded-md">
+        <p>{error}</p>
+      </div>
+    )
+  }
+
+  if (members.length === 0) {
+    return (
+      <div className="text-center text-muted-foreground py-12 border rounded-md">
+        <p>No members in this project yet.</p>
+      </div>
+    )
+  }
+
+  const HEADER_HEIGHT = 44
+  const contentHeight = HEADER_HEIGHT + members.length * MEMBER_ROW_HEIGHT
+
+  return (
+    <div className="flex min-h-0 flex-1 flex-col gap-2">
+      <div
+        className="relative flex flex-col rounded-md border overflow-hidden"
+        style={{ height: `min(${contentHeight}px, 100%)` }}
+      >
+        <div className="flex items-center gap-4 p-3 border-b bg-muted/30 text-sm font-medium text-muted-foreground">
+          <div className="flex-1">Member</div>
+          <div className="w-32">Role</div>
+        </div>
+
+        <div
+          ref={scrollContainerRef}
+          className="relative flex-1 overflow-y-auto min-h-0"
+          onScroll={handleScroll}
+        >
+          {topSpacerHeight > 0 && (
+            <div style={{ height: topSpacerHeight }} aria-hidden="true" />
+          )}
+
+          {visibleMembers.map((member) => (
+            <div
+              key={member.user_id}
+              className="flex items-center gap-4 px-3 border-b last:border-b-0 hover:bg-muted/50 transition-colors"
+              style={{ height: MEMBER_ROW_HEIGHT }}
+            >
+              <div className="flex flex-1 items-center gap-3 min-w-0">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary text-sm font-medium">
+                  {member.name
+                    .split(" ")
+                    .map((n) => n[0])
+                    .join("")
+                    .slice(0, 2)
+                    .toUpperCase()}
+                </div>
+                <div className="min-w-0">
+                  <p className="font-medium truncate">{member.name}</p>
+                  <p className="text-sm text-muted-foreground truncate">
+                    {member.email}
+                  </p>
+                </div>
+              </div>
+              <div className="w-32">
+                <span className="inline-flex items-center rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium">
+                  {roleLabels[member.project_role] || member.project_role}
+                </span>
+              </div>
+            </div>
+          ))}
+
+          {bottomSpacerHeight > 0 && (
+            <div style={{ height: bottomSpacerHeight }} aria-hidden="true" />
+          )}
+        </div>
+      </div>
+
+      <div className="flex items-center justify-center px-2 py-1 text-sm text-muted-foreground">
+        <span>{members.length} member{members.length !== 1 && "s"}</span>
+      </div>
     </div>
   )
 }

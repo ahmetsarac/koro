@@ -194,6 +194,9 @@ export function DataTable({ columns }: DataTableProps) {
     </colgroup>
   )
 
+  const HEADER_HEIGHT = 41
+  const contentHeight = HEADER_HEIGHT + rows.length * ROW_HEIGHT
+
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4">
       <DataTableToolbar
@@ -202,7 +205,10 @@ export function DataTable({ columns }: DataTableProps) {
         onSearchChange={setSearchValue}
       />
 
-      <div className="relative flex max-h-full min-h-0 flex-1 flex-col rounded-md border overflow-hidden">
+      <div
+        className="relative flex flex-col rounded-md border overflow-hidden"
+        style={{ height: `min(${contentHeight}px, 100%)` }}
+      >
         <table className="w-full text-xs" style={{ tableLayout: "fixed" }}>
           {colGroup}
           <TableHeader>

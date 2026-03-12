@@ -1,5 +1,6 @@
 "use client"
 
+import Link from "next/link"
 import { type ColumnDef } from "@tanstack/react-table"
 
 import { Checkbox } from "@/components/ui/checkbox"
@@ -9,7 +10,7 @@ import { type Issue } from "../data/schema"
 import { DataTableColumnHeader } from "./data-table-column-header"
 import { DataTableRowActions } from "./data-table-row-actions"
 
-export const columns: ColumnDef<Issue>[] = [
+export const createColumns = (orgSlug: string): ColumnDef<Issue>[] => [
   {
     id: "select",
     size: 28,
@@ -43,9 +44,12 @@ export const columns: ColumnDef<Issue>[] = [
       <DataTableColumnHeader column={column} title="Issue" />
     ),
     cell: ({ row }) => (
-      <div className="w-[80px] font-mono text-xs">
+      <Link
+        href={`/${orgSlug}/issue/${row.original.display_key}`}
+        className="w-[80px] font-mono text-xs hover:underline"
+      >
         {row.original.display_key}
-      </div>
+      </Link>
     ),
     enableSorting: true,
     enableHiding: false,
@@ -57,9 +61,12 @@ export const columns: ColumnDef<Issue>[] = [
       <DataTableColumnHeader column={column} title="Title" />
     ),
     cell: ({ row }) => (
-      <span className="max-w-[500px] truncate font-medium">
+      <Link
+        href={`/${orgSlug}/issue/${row.original.display_key}`}
+        className="max-w-[500px] truncate font-medium hover:underline"
+      >
         {row.getValue("title")}
-      </span>
+      </Link>
     ),
   },
   {
