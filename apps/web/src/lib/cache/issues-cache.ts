@@ -43,11 +43,26 @@ export function clearProjectIssuesCache(orgSlug: string, projectKey: string): vo
 // Update a specific issue in all caches
 export function updateIssueInCaches(
   issueKey: string,
-  updates: { title?: string; description?: string }
+  updates: {
+    title?: string
+    description?: string
+    status?: string
+    priority?: string
+    assignee_id?: string | null
+    assignee_name?: string | null
+  }
 ): void {
   // Update in myIssuesCache
   for (const [filterType, state] of myIssuesCache.entries()) {
-    const items = state.items as Array<{ display_key?: string; title?: string; description?: string }>
+    const items = state.items as Array<{
+      display_key?: string
+      title?: string
+      description?: string
+      status?: string
+      priority?: string
+      assignee_id?: string | null
+      assignee_name?: string | null
+    }>
     const index = items.findIndex((item) => item.display_key === issueKey)
     if (index !== -1) {
       const updatedItems = [...items]
@@ -58,7 +73,15 @@ export function updateIssueInCaches(
 
   // Update in projectIssuesCache
   for (const [cacheKey, state] of projectIssuesCache.entries()) {
-    const items = state.items as Array<{ display_key?: string; title?: string; description?: string }>
+    const items = state.items as Array<{
+      display_key?: string
+      title?: string
+      description?: string
+      status?: string
+      priority?: string
+      assignee_id?: string | null
+      assignee_name?: string | null
+    }>
     const index = items.findIndex((item) => item.display_key === issueKey)
     if (index !== -1) {
       const updatedItems = [...items]

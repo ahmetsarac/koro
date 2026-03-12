@@ -9,9 +9,8 @@ export async function PATCH(
 ) {
   try {
     const { issueId } = await params
-    const body = await request.json()
 
-    const apiUrl = new URL(`${getApiBaseUrl()}/issues/${issueId}/status`)
+    const apiUrl = `${getApiBaseUrl()}/issues/${issueId}/status`
 
     const accessToken = request.cookies.get(ACCESS_TOKEN_COOKIE_NAME)?.value
     const headers: HeadersInit = {
@@ -21,16 +20,18 @@ export async function PATCH(
       headers["Authorization"] = `Bearer ${accessToken}`
     }
 
+    const reqBody = await request.json()
+
     const response = await fetch(apiUrl, {
       method: "PATCH",
       cache: "no-store",
       headers,
-      body: JSON.stringify(body),
+      body: JSON.stringify(reqBody),
     })
 
-    const responseBody = await response.text()
+    const body = await response.text()
 
-    return new NextResponse(responseBody, {
+    return new NextResponse(body, {
       status: response.status,
       headers: {
         "content-type":
@@ -38,10 +39,10 @@ export async function PATCH(
       },
     })
   } catch (error) {
-    console.error("Failed to proxy status update request", error)
+    console.error("Failed to update issue status", error)
 
     return NextResponse.json(
-      { message: "Status update request failed." },
+      { message: "Failed to update issue status" },
       { status: 500 }
     )
   }

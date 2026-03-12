@@ -6,7 +6,7 @@ import {
   CheckCircle,
   Circle,
   HelpCircle,
-  SignalHigh,
+  Flame,
   Timer,
 } from "lucide-react"
 
@@ -40,23 +40,23 @@ export const statuses = [
 
 export const priorities = [
   {
-    label: "Urgent",
-    value: "p0",
-    icon: SignalHigh,
+    label: "Critical",
+    value: "critical",
+    icon: Flame,
   },
   {
     label: "High",
-    value: "p1",
+    value: "high",
     icon: ArrowUp,
   },
   {
     label: "Medium",
-    value: "p2",
+    value: "medium",
     icon: ArrowRight,
   },
   {
     label: "Low",
-    value: "p3",
+    value: "low",
     icon: ArrowDown,
   },
 ]

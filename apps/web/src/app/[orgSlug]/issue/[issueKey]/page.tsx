@@ -19,6 +19,11 @@ import {
   Pencil,
   Check,
   X,
+  Minus,
+  ArrowDown,
+  ArrowUp,
+  Flame,
+  ArrowRight,
 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
@@ -26,6 +31,12 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Badge } from "@/components/ui/badge"
 import { Textarea } from "@/components/ui/textarea"
 import { Input } from "@/components/ui/input"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { updateIssueInCaches } from "@/lib/cache/issues-cache"
 
 interface Issue {
@@ -34,10 +45,18 @@ interface Issue {
   title: string
   description: string | null
   status: string
+  priority: string
   assignee_id: string | null
+  assignee_name: string | null
   project_id: string
   created_at: string
   updated_at: string
+}
+
+interface ProjectMember {
+  user_id: string
+  name: string
+  email: string
 }
 
 interface Comment {
@@ -58,6 +77,20 @@ const statusConfig: Record<
   blocked: { label: "Blocked", icon: Ban, color: "bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300" },
   done: { label: "Done", icon: CheckCircle, color: "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300" },
 }
+
+const statusList = ["backlog", "todo", "in_progress", "blocked", "done"] as const
+
+const priorityConfig: Record<
+  string,
+  { label: string; icon: React.ElementType; color: string }
+> = {
+  critical: { label: "Critical", icon: Flame, color: "bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300" },
+  high: { label: "High", icon: ArrowUp, color: "bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300" },
+  medium: { label: "Medium", icon: ArrowRight, color: "bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300" },
+  low: { label: "Low", icon: ArrowDown, color: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300" },
+}
+
+const priorityList = ["critical", "high", "medium", "low"] as const
 
 async function fetchIssue(orgSlug: string, issueKey: string): Promise<Issue> {
   const response = await fetch(`/api/orgs/${orgSlug}/issues/${issueKey}`, {
@@ -117,13 +150,74 @@ async function createComment(
 async function updateIssue(
   orgSlug: string,
   issueKey: string,
-  data: { title?: string; description?: string }
+  data: { title?: string; description?: string; priority?: string }
 ): Promise<boolean> {
   const response = await fetch(`/api/orgs/${orgSlug}/issues/${issueKey}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     credentials: "same-origin",
     body: JSON.stringify(data),
+  })
+
+  return response.ok
+}
+
+async function assignIssue(
+  orgSlug: string,
+  issueKey: string,
+  userId: string
+): Promise<boolean> {
+  const response = await fetch(`/api/orgs/${orgSlug}/issues/${issueKey}/assignee`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    credentials: "same-origin",
+    body: JSON.stringify({ user_id: userId }),
+  })
+
+  return response.ok
+}
+
+async function unassignIssue(
+  orgSlug: string,
+  issueKey: string
+): Promise<boolean> {
+  const response = await fetch(`/api/orgs/${orgSlug}/issues/${issueKey}/assignee`, {
+    method: "DELETE",
+    credentials: "same-origin",
+  })
+
+  return response.ok
+}
+
+async function fetchProjectMembers(
+  orgSlug: string,
+  projectId: string
+): Promise<ProjectMember[]> {
+  const response = await fetch(
+    `/api/orgs/${orgSlug}/projects/${projectId}/members`,
+    {
+      cache: "no-store",
+      credentials: "same-origin",
+    }
+  )
+
+  if (!response.ok) {
+    return []
+  }
+
+  const data = await response.json()
+  return data.items || []
+}
+
+async function updateIssueStatus(
+  issueId: string,
+  status: string
+): Promise<boolean> {
+  const response = await fetch(`/api/issues/${issueId}/status`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    credentials: "same-origin",
+    body: JSON.stringify({ status }),
   })
 
   return response.ok
@@ -152,6 +246,12 @@ export default function IssueDetailPage({
   const [isEditingTitle, setIsEditingTitle] = React.useState(false)
   const [editedTitle, setEditedTitle] = React.useState("")
   const [isSavingTitle, setIsSavingTitle] = React.useState(false)
+
+  const [isUpdatingStatus, setIsUpdatingStatus] = React.useState(false)
+  const [isUpdatingPriority, setIsUpdatingPriority] = React.useState(false)
+  const [isUpdatingAssignee, setIsUpdatingAssignee] = React.useState(false)
+  const [projectMembers, setProjectMembers] = React.useState<ProjectMember[]>([])
+  const [isLoadingMembers, setIsLoadingMembers] = React.useState(false)
 
   React.useEffect(() => {
     async function load() {
@@ -256,6 +356,74 @@ export default function IssueDetailPage({
     }
   }
 
+  const handleStatusChange = async (newStatus: string) => {
+    if (!issue || isUpdatingStatus || newStatus === issue.status) return
+
+    setIsUpdatingStatus(true)
+    try {
+      const success = await updateIssueStatus(issue.issue_id, newStatus)
+      if (success) {
+        setIssue({ ...issue, status: newStatus })
+        updateIssueInCaches(issue.display_key, { status: newStatus } as { status?: string })
+      }
+    } finally {
+      setIsUpdatingStatus(false)
+    }
+  }
+
+  const handlePriorityChange = async (newPriority: string) => {
+    if (!issue || isUpdatingPriority || newPriority === issue.priority) return
+
+    setIsUpdatingPriority(true)
+    try {
+      const success = await updateIssue(orgSlug, issueKey, { priority: newPriority })
+      if (success) {
+        setIssue({ ...issue, priority: newPriority })
+        updateIssueInCaches(issue.display_key, { priority: newPriority })
+      }
+    } finally {
+      setIsUpdatingPriority(false)
+    }
+  }
+
+  const handleAssigneeChange = async (userId: string | null) => {
+    if (!issue || isUpdatingAssignee) return
+    if (userId === issue.assignee_id) return
+
+    setIsUpdatingAssignee(true)
+    try {
+      let success: boolean
+      if (userId === null) {
+        success = await unassignIssue(orgSlug, issueKey)
+        if (success) {
+          setIssue({ ...issue, assignee_id: null, assignee_name: null })
+          updateIssueInCaches(issue.display_key, { assignee_id: null, assignee_name: null })
+        }
+      } else {
+        success = await assignIssue(orgSlug, issueKey, userId)
+        if (success) {
+          const member = projectMembers.find((m) => m.user_id === userId)
+          setIssue({ ...issue, assignee_id: userId, assignee_name: member?.name || null })
+          updateIssueInCaches(issue.display_key, { assignee_id: userId, assignee_name: member?.name || null })
+        }
+      }
+    } finally {
+      setIsUpdatingAssignee(false)
+    }
+  }
+
+  const loadProjectMembers = async () => {
+    if (!issue || projectMembers.length > 0 || isLoadingMembers) return
+    setIsLoadingMembers(true)
+    try {
+      const projectKey = issue.display_key.split("-")[0]
+      const members = await fetchProjectMembers(orgSlug, projectKey)
+      setProjectMembers(members)
+    } finally {
+      setIsLoadingMembers(false)
+    }
+  }
+
   if (isLoading) {
     return (
       <div className="flex h-[calc(100svh-4.5rem)] flex-col gap-6">
@@ -290,6 +458,13 @@ export default function IssueDetailPage({
     color: "bg-muted text-muted-foreground",
   }
   const StatusIcon = status.icon
+
+  const priority = priorityConfig[issue.priority] || {
+    label: issue.priority,
+    icon: Minus,
+    color: "bg-muted text-muted-foreground",
+  }
+  const PriorityIcon = priority.icon
 
   const projectKey = issue.display_key.split("-")[0]
 
@@ -354,17 +529,114 @@ export default function IssueDetailPage({
         )}
 
         <div className="flex items-center gap-4 mb-6">
-          <Badge className={`${status.color} gap-1.5`}>
-            <StatusIcon className="h-3.5 w-3.5" />
-            {status.label}
-          </Badge>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild disabled={isUpdatingStatus}>
+              <button className="focus:outline-none">
+                <Badge className={`${status.color} gap-1.5 cursor-pointer hover:opacity-80 transition-opacity`}>
+                  <StatusIcon className="h-3.5 w-3.5" />
+                  {status.label}
+                </Badge>
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start">
+              {statusList.map((statusKey) => {
+                const config = statusConfig[statusKey]
+                const Icon = config.icon
+                return (
+                  <DropdownMenuItem
+                    key={statusKey}
+                    onClick={() => handleStatusChange(statusKey)}
+                    className="gap-2"
+                  >
+                    <Icon className="h-4 w-4" />
+                    {config.label}
+                    {statusKey === issue.status && (
+                      <Check className="h-4 w-4 ml-auto" />
+                    )}
+                  </DropdownMenuItem>
+                )
+              })}
+            </DropdownMenuContent>
+          </DropdownMenu>
 
-          {issue.assignee_id && (
-            <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
-              <User className="h-4 w-4" />
-              <span>Assigned</span>
-            </div>
-          )}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild disabled={isUpdatingPriority}>
+              <button className="focus:outline-none">
+                <Badge className={`${priority.color} gap-1.5 cursor-pointer hover:opacity-80 transition-opacity`}>
+                  <PriorityIcon className="h-3.5 w-3.5" />
+                  {priority.label}
+                </Badge>
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start">
+              {priorityList.map((priorityKey) => {
+                const config = priorityConfig[priorityKey]
+                const Icon = config.icon
+                return (
+                  <DropdownMenuItem
+                    key={priorityKey}
+                    onClick={() => handlePriorityChange(priorityKey)}
+                    className="gap-2"
+                  >
+                    <Icon className="h-4 w-4" />
+                    {config.label}
+                    {priorityKey === issue.priority && (
+                      <Check className="h-4 w-4 ml-auto" />
+                    )}
+                  </DropdownMenuItem>
+                )
+              })}
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          <DropdownMenu onOpenChange={(open) => open && loadProjectMembers()}>
+            <DropdownMenuTrigger asChild disabled={isUpdatingAssignee}>
+              <button className="focus:outline-none">
+                <Badge variant="outline" className="gap-1.5 cursor-pointer hover:opacity-80 transition-opacity">
+                  <User className="h-3.5 w-3.5" />
+                  {issue.assignee_name || "Unassigned"}
+                </Badge>
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start">
+              <DropdownMenuItem
+                onClick={() => handleAssigneeChange(null)}
+                className="gap-2"
+              >
+                <User className="h-4 w-4" />
+                Unassigned
+                {!issue.assignee_id && (
+                  <Check className="h-4 w-4 ml-auto" />
+                )}
+              </DropdownMenuItem>
+              {isLoadingMembers ? (
+                <DropdownMenuItem disabled className="gap-2">
+                  Loading...
+                </DropdownMenuItem>
+              ) : (
+                projectMembers.map((member) => (
+                  <DropdownMenuItem
+                    key={member.user_id}
+                    onClick={() => handleAssigneeChange(member.user_id)}
+                    className="gap-2"
+                  >
+                    <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary text-[10px] font-medium">
+                      {member.name
+                        .split(" ")
+                        .map((n) => n[0])
+                        .join("")
+                        .toUpperCase()
+                        .slice(0, 2)}
+                    </div>
+                    {member.name}
+                    {member.user_id === issue.assignee_id && (
+                      <Check className="h-4 w-4 ml-auto" />
+                    )}
+                  </DropdownMenuItem>
+                ))
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
 
         <div className="flex items-center gap-6 text-sm text-muted-foreground mb-8">

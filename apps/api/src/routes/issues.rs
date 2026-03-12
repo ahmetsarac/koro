@@ -1061,6 +1061,7 @@ pub async fn update_issue_status(
 pub struct UpdateIssueRequest {
     pub title: Option<String>,
     pub description: Option<String>,
+    pub priority: Option<String>,
 }
 
 #[derive(serde::Serialize)]
@@ -1068,6 +1069,7 @@ pub struct UpdateIssueResponse {
     pub issue_id: uuid::Uuid,
     pub title: String,
     pub description: Option<String>,
+    pub priority: String,
 }
 
 pub async fn update_issue(
@@ -1104,7 +1106,7 @@ pub async fn update_issue(
     // Resolve issue
     let issue_row = match sqlx::query!(
         r#"
-        SELECT i.id as issue_id, i.project_id, i.title, i.description
+        SELECT i.id as issue_id, i.project_id, i.title, i.description, i.priority
         FROM issues i
         JOIN projects p ON p.id = i.project_id
         WHERE p.org_id = $1 AND p.project_key = $2 AND i.key_seq = $3
@@ -1145,14 +1147,24 @@ pub async fn update_issue(
         return StatusCode::FORBIDDEN.into_response();
     }
 
+    // Validate priority if provided
+    let allowed_priorities = ["critical", "high", "medium", "low"];
+    if let Some(ref p) = req.priority {
+        if !allowed_priorities.contains(&p.as_str()) {
+            return (StatusCode::BAD_REQUEST, "invalid priority").into_response();
+        }
+    }
+
     // Update issue
     let new_title = req.title.unwrap_or(issue_row.title);
     let new_description = req.description.or(issue_row.description);
+    let new_priority = req.priority.unwrap_or(issue_row.priority);
 
     if let Err(e) = sqlx::query!(
-        r#"UPDATE issues SET title = $1, description = $2 WHERE id = $3"#,
+        r#"UPDATE issues SET title = $1, description = $2, priority = $3 WHERE id = $4"#,
         new_title,
         new_description,
+        new_priority,
         issue_row.issue_id
     )
     .execute(&state.db)
@@ -1168,6 +1180,7 @@ pub async fn update_issue(
             issue_id: issue_row.issue_id,
             title: new_title,
             description: new_description,
+            priority: new_priority,
         }),
     )
         .into_response()
@@ -1439,7 +1452,9 @@ pub struct IssueDetailResponse {
     pub title: String,
     pub description: Option<String>,
     pub status: String,
+    pub priority: String,
     pub assignee_id: Option<uuid::Uuid>,
+    pub assignee_name: Option<String>,
     pub project_id: uuid::Uuid,
     pub created_at: chrono::DateTime<chrono::Utc>,
     pub updated_at: chrono::DateTime<chrono::Utc>,
@@ -1466,12 +1481,15 @@ pub async fn get_issue(
             i.title,
             i.description,
             i.status,
+            i.priority,
             i.assignee_id,
             i.created_at,
             i.updated_at,
-            p.project_key
+            p.project_key,
+            u.name as "assignee_name?"
         FROM issues i
         JOIN projects p ON p.id = i.project_id
+        LEFT JOIN users u ON u.id = i.assignee_id
         WHERE i.id = $1
         "#,
         issue_id
@@ -1518,7 +1536,9 @@ pub async fn get_issue(
             title: row.title,
             description: row.description,
             status: row.status,
+            priority: row.priority,
             assignee_id: row.assignee_id,
+            assignee_name: row.assignee_name,
             project_id: row.project_id,
             created_at: row.created_at,
             updated_at: row.updated_at,
@@ -1547,14 +1567,17 @@ pub async fn get_issue_by_key(
             i.title,
             i.description,
             i.status,
+            i.priority,
             i.assignee_id,
             i.created_at,
             i.updated_at,
             p.project_key,
-            o.id as org_id
+            o.id as org_id,
+            u.name as "assignee_name?"
         FROM issues i
         JOIN projects p ON p.id = i.project_id
         JOIN organizations o ON o.id = p.org_id
+        LEFT JOIN users u ON u.id = i.assignee_id
         WHERE o.slug = $1
           AND p.project_key = $2
           AND i.key_seq = $3
@@ -1605,7 +1628,9 @@ pub async fn get_issue_by_key(
             title: row.title,
             description: row.description,
             status: row.status,
+            priority: row.priority,
             assignee_id: row.assignee_id,
+            assignee_name: row.assignee_name,
             project_id: row.project_id,
             created_at: row.created_at,
             updated_at: row.updated_at,

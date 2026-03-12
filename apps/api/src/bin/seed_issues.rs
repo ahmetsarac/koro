@@ -6,7 +6,7 @@ use uuid::Uuid;
 const ISSUE_COUNT: i32 = 500;
 
 const STATUSES: [&str; 5] = ["backlog", "todo", "in_progress", "blocked", "done"];
-const PRIORITIES: [&str; 4] = ["p0", "p1", "p2", "p3"];
+const PRIORITIES: [&str; 4] = ["critical", "high", "medium", "low"];
 
 const TITLES: [&str; 20] = [
     "Fix login page styling",
