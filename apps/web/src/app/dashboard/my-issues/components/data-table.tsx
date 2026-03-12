@@ -25,6 +25,7 @@ import {
   fetchMyIssues,
   type IssueSortBy,
   type FetchMyIssuesParams,
+  type IssueFilterType,
 } from "@/lib/my-issues"
 
 import { type IssueFacets, type Issue } from "../data/schema"
@@ -47,10 +48,12 @@ const COLUMN_TO_SORT_BY: Record<string, IssueSortBy> = {
 function buildFetchParams(
   sorting: SortingState,
   columnFilters: ColumnFiltersState,
-  cursor: string | null
+  cursor: string | null,
+  filterType: IssueFilterType
 ): FetchMyIssuesParams {
   const params: FetchMyIssuesParams = {
     limit: PAGE_SIZE,
+    filter_type: filterType,
     ...(cursor ? { cursor } : { offset: 0 }),
   }
 
@@ -77,9 +80,10 @@ function buildFetchParams(
 
 interface DataTableProps {
   columns: ColumnDef<Issue, unknown>[]
+  filterType: IssueFilterType
 }
 
-export function DataTable({ columns }: DataTableProps) {
+export function DataTable({ columns, filterType }: DataTableProps) {
   const [items, setItems] = React.useState<Issue[]>([])
   const [nextCursor, setNextCursor] = React.useState<string | null>(null)
   const [total, setTotal] = React.useState(0)
@@ -114,7 +118,7 @@ export function DataTable({ columns }: DataTableProps) {
         setIsInitialLoading(true)
         setError(null)
 
-        const params = buildFetchParams(sorting, columnFilters, null)
+        const params = buildFetchParams(sorting, columnFilters, null, filterType)
         const res = await fetchMyIssues(params)
 
         if (cancelled) return
@@ -139,7 +143,7 @@ export function DataTable({ columns }: DataTableProps) {
     return () => {
       cancelled = true
     }
-  }, [sorting, columnFilters])
+  }, [sorting, columnFilters, filterType])
 
   // Container yüksekliği
   React.useLayoutEffect(() => {
@@ -161,7 +165,7 @@ export function DataTable({ columns }: DataTableProps) {
     try {
       setIsFetchingMore(true)
 
-      const params = buildFetchParams(sorting, columnFilters, nextCursor)
+      const params = buildFetchParams(sorting, columnFilters, nextCursor, filterType)
       const res = await fetchMyIssues(params)
 
       setItems((prev) => [...prev, ...res.items])
@@ -173,7 +177,7 @@ export function DataTable({ columns }: DataTableProps) {
     } finally {
       setIsFetchingMore(false)
     }
-  }, [nextCursor, hasMore, isFetchingMore, sorting, columnFilters])
+  }, [nextCursor, hasMore, isFetchingMore, sorting, columnFilters, filterType])
 
   const table = useReactTable({
     data: items,

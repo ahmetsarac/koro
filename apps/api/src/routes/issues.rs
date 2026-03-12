@@ -317,6 +317,7 @@ pub struct ListMyIssuesQuery {
     pub priority: Option<String>,
     pub sort_by: Option<MyIssueSortBy>,
     pub sort_dir: Option<SortDirection>,
+    pub filter_type: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -491,17 +492,35 @@ fn apply_my_issues_cursor_filter(
     Ok(())
 }
 
+fn push_my_issues_user_filter(
+    builder: &mut QueryBuilder<Postgres>,
+    user_id: uuid::Uuid,
+    filter_type: Option<&str>,
+) {
+    match filter_type {
+        Some("created") => {
+            builder.push("i.reporter_id = ");
+            builder.push_bind(user_id);
+        }
+        _ => {
+            builder.push("i.assignee_id = ");
+            builder.push_bind(user_id);
+        }
+    }
+}
+
 async fn fetch_my_issues_facets(
     pool: &sqlx::PgPool,
     user_id: uuid::Uuid,
     query: &ListMyIssuesQuery,
 ) -> Result<MyIssueFacets, sqlx::Error> {
     let mut facets = MyIssueFacets::default();
+    let filter_type = query.filter_type.as_deref();
 
     let mut status_builder = QueryBuilder::<Postgres>::new(
-        "SELECT i.status as value, COUNT(*) as count FROM issues i WHERE i.assignee_id = ",
+        "SELECT i.status as value, COUNT(*) as count FROM issues i WHERE ",
     );
-    status_builder.push_bind(user_id);
+    push_my_issues_user_filter(&mut status_builder, user_id, filter_type);
     apply_my_issues_filters(&mut status_builder, query, Some("status"));
     status_builder.push(" GROUP BY i.status");
     let rows: Vec<FacetRow> = status_builder
@@ -513,9 +532,9 @@ async fn fetch_my_issues_facets(
     }
 
     let mut priority_builder = QueryBuilder::<Postgres>::new(
-        "SELECT i.priority as value, COUNT(*) as count FROM issues i WHERE i.assignee_id = ",
+        "SELECT i.priority as value, COUNT(*) as count FROM issues i WHERE ",
     );
-    priority_builder.push_bind(user_id);
+    push_my_issues_user_filter(&mut priority_builder, user_id, filter_type);
     apply_my_issues_filters(&mut priority_builder, query, Some("priority"));
     priority_builder.push(" GROUP BY i.priority");
     let rows: Vec<FacetRow> = priority_builder
@@ -555,10 +574,12 @@ pub async fn list_my_issues(
         None => None,
     };
 
+    let filter_type = query.filter_type.as_deref();
+
     let mut count_query = QueryBuilder::<Postgres>::new(
-        "SELECT COUNT(*) FROM issues i WHERE i.assignee_id = ",
+        "SELECT COUNT(*) FROM issues i WHERE ",
     );
-    count_query.push_bind(user_id);
+    push_my_issues_user_filter(&mut count_query, user_id, filter_type);
     apply_my_issues_filters(&mut count_query, &query, None);
 
     let total = match count_query
@@ -585,9 +606,9 @@ pub async fn list_my_issues(
         "SELECT i.id, p.project_key, i.key_seq, i.title, i.status, i.priority, i.created_at, i.updated_at \
          FROM issues i \
          JOIN projects p ON p.id = i.project_id \
-         WHERE i.assignee_id = ",
+         WHERE ",
     );
-    items_query.push_bind(user_id);
+    push_my_issues_user_filter(&mut items_query, user_id, filter_type);
     apply_my_issues_filters(&mut items_query, &query, None);
 
     if let Some(cursor) = decoded_cursor.as_ref() {

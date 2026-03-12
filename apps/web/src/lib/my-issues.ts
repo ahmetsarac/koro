@@ -13,6 +13,8 @@ export type IssueSortBy =
 
 export type IssueSortDir = "asc" | "desc"
 
+export type IssueFilterType = "assigned" | "created"
+
 export type FetchMyIssuesParams = {
   limit?: number
   offset?: number
@@ -22,6 +24,7 @@ export type FetchMyIssuesParams = {
   priority?: string | string[]
   sort_by?: IssueSortBy
   sort_dir?: IssueSortDir
+  filter_type?: IssueFilterType
 }
 
 function buildSearchParams(params: FetchMyIssuesParams) {
