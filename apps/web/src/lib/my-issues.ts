@@ -1,38 +1,33 @@
 import {
-  demoTaskListResponseSchema,
-  type DemoTaskListResponse,
+  issueListResponseSchema,
+  type IssueListResponse,
 } from "@/app/dashboard/my-issues/data/schema"
 
-/** Backend sort_by: sort_order | created_at | id | title | status | label | priority */
-export type DemoTaskSortBy =
-  | "sort_order"
+export type IssueSortBy =
   | "created_at"
-  | "id"
+  | "updated_at"
+  | "key_seq"
   | "title"
   | "status"
-  | "label"
   | "priority"
 
-export type DemoTaskSortDir = "asc" | "desc"
+export type IssueSortDir = "asc" | "desc"
 
-export type FetchDemoTasksParams = {
+export type FetchMyIssuesParams = {
   limit?: number
   offset?: number
-  /** Opaque cursor for next page (when set, backend ignores offset) */
   cursor?: string | null
   q?: string
-  /** Single value or multiple (backend accepts comma-separated) */
   status?: string | string[]
-  label?: string | string[]
   priority?: string | string[]
-  sort_by?: DemoTaskSortBy
-  sort_dir?: DemoTaskSortDir
+  sort_by?: IssueSortBy
+  sort_dir?: IssueSortDir
 }
 
-function buildSearchParams(params: FetchDemoTasksParams) {
+function buildSearchParams(params: FetchMyIssuesParams) {
   const searchParams = new URLSearchParams()
 
-  const arrayKeys = ["status", "label", "priority"] as const
+  const arrayKeys = ["status", "priority"] as const
   for (const key of arrayKeys) {
     const value = params[key]
     if (value === undefined) continue
@@ -41,7 +36,7 @@ function buildSearchParams(params: FetchDemoTasksParams) {
     if (joined) searchParams.set(key, joined)
   }
 
-  const { status: _s, label: _l, priority: _p, cursor, offset, ...rest } = params
+  const { status: _s, priority: _p, cursor, offset, ...rest } = params
   if (cursor) {
     searchParams.set("cursor", cursor)
   } else if (offset !== undefined) {
@@ -56,19 +51,21 @@ function buildSearchParams(params: FetchDemoTasksParams) {
   return searchParams
 }
 
-export async function fetchDemoTasks(
-  params: FetchDemoTasksParams = {}
-): Promise<DemoTaskListResponse> {
+export async function fetchMyIssues(
+  params: FetchMyIssuesParams = {}
+): Promise<IssueListResponse> {
   const searchParams = buildSearchParams(params)
   const query = searchParams.toString()
-  const response = await fetch(`/api/demo/tasks${query ? `?${query}` : ""}`, {
+
+  const response = await fetch(`/api/my-issues${query ? `?${query}` : ""}`, {
     cache: "no-store",
+    credentials: "same-origin",
   })
 
   if (!response.ok) {
-    throw new Error("Failed to fetch demo tasks.")
+    throw new Error("Failed to fetch my issues.")
   }
 
   const data = await response.json()
-  return demoTaskListResponseSchema.parse(data)
+  return issueListResponseSchema.parse(data)
 }

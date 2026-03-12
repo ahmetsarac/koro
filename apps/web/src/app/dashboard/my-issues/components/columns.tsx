@@ -2,15 +2,14 @@
 
 import { type ColumnDef } from "@tanstack/react-table"
 
-import { Badge } from "@/components/ui/badge"
 import { Checkbox } from "@/components/ui/checkbox"
 
-import { labels, priorities, statuses } from "../data/data"
-import { type Task } from "../data/schema"
+import { priorities, statuses } from "../data/data"
+import { type Issue } from "../data/schema"
 import { DataTableColumnHeader } from "./data-table-column-header"
 import { DataTableRowActions } from "./data-table-row-actions"
 
-export const columns: ColumnDef<Task>[] = [
+export const columns: ColumnDef<Issue>[] = [
   {
     id: "select",
     size: 28,
@@ -37,13 +36,18 @@ export const columns: ColumnDef<Task>[] = [
     enableHiding: false,
   },
   {
-    accessorKey: "id",
+    accessorKey: "display_key",
+    id: "id",
     size: 100,
     header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="Task" />
+      <DataTableColumnHeader column={column} title="Issue" />
     ),
-    cell: ({ row }) => <div className="w-[80px]">{row.getValue("id")}</div>,
-    enableSorting: false,
+    cell: ({ row }) => (
+      <div className="w-[80px] font-mono text-xs">
+        {row.original.display_key}
+      </div>
+    ),
+    enableSorting: true,
     enableHiding: false,
   },
   {
@@ -57,20 +61,6 @@ export const columns: ColumnDef<Task>[] = [
         {row.getValue("title")}
       </span>
     ),
-  },
-  {
-    accessorKey: "label",
-    size: 120,
-    header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="Label" />
-    ),
-    cell: ({ row }) => {
-      const label = labels.find((l) => l.value === row.getValue("label"))
-      return label ? <Badge variant="outline">{label.label}</Badge> : null
-    },
-    filterFn: (row, id, value) => {
-      return value.includes(row.getValue(id))
-    },
   },
   {
     accessorKey: "status",

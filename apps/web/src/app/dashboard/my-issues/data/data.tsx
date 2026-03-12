@@ -2,27 +2,13 @@ import {
   ArrowDown,
   ArrowRight,
   ArrowUp,
+  Ban,
   CheckCircle,
   Circle,
-  CircleOff,
   HelpCircle,
+  SignalHigh,
   Timer,
 } from "lucide-react"
-
-export const labels = [
-  {
-    value: "bug",
-    label: "Bug",
-  },
-  {
-    value: "feature",
-    label: "Feature",
-  },
-  {
-    value: "documentation",
-    label: "Documentation",
-  },
-]
 
 export const statuses = [
   {
@@ -36,36 +22,41 @@ export const statuses = [
     icon: Circle,
   },
   {
-    value: "in progress",
+    value: "in_progress",
     label: "In Progress",
     icon: Timer,
+  },
+  {
+    value: "blocked",
+    label: "Blocked",
+    icon: Ban,
   },
   {
     value: "done",
     label: "Done",
     icon: CheckCircle,
   },
-  {
-    value: "canceled",
-    label: "Canceled",
-    icon: CircleOff,
-  },
 ]
 
 export const priorities = [
   {
-    label: "Low",
-    value: "low",
-    icon: ArrowDown,
-  },
-  {
-    label: "Medium",
-    value: "medium",
-    icon: ArrowRight,
+    label: "Urgent",
+    value: "p0",
+    icon: SignalHigh,
   },
   {
     label: "High",
-    value: "high",
+    value: "p1",
     icon: ArrowUp,
+  },
+  {
+    label: "Medium",
+    value: "p2",
+    icon: ArrowRight,
+  },
+  {
+    label: "Low",
+    value: "p3",
+    icon: ArrowDown,
   },
 ]

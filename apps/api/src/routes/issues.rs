@@ -4,7 +4,9 @@ use axum::{
     http::StatusCode,
     response::IntoResponse,
 };
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use sqlx::{FromRow, Postgres, QueryBuilder};
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 
@@ -181,6 +183,486 @@ pub struct IssueListItem {
 #[derive(Serialize)]
 pub struct ListIssuesResponse {
     pub items: Vec<IssueListItem>,
+}
+
+#[derive(Debug, Clone, Copy, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum MyIssueSortBy {
+    CreatedAt,
+    UpdatedAt,
+    KeySeq,
+    Title,
+    Status,
+    Priority,
+}
+
+impl Default for MyIssueSortBy {
+    fn default() -> Self {
+        Self::UpdatedAt
+    }
+}
+
+impl MyIssueSortBy {
+    fn as_sql(self) -> &'static str {
+        match self {
+            Self::CreatedAt => "i.created_at",
+            Self::UpdatedAt => "i.updated_at",
+            Self::KeySeq => "i.key_seq",
+            Self::Title => "i.title",
+            Self::Status => "i.status",
+            Self::Priority => "i.priority",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum SortDirection {
+    Asc,
+    Desc,
+}
+
+impl Default for SortDirection {
+    fn default() -> Self {
+        Self::Desc
+    }
+}
+
+impl SortDirection {
+    fn as_sql(self) -> &'static str {
+        match self {
+            Self::Asc => "ASC",
+            Self::Desc => "DESC",
+        }
+    }
+
+    fn comparison_sql(self) -> &'static str {
+        match self {
+            Self::Asc => ">",
+            Self::Desc => "<",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+struct MyIssuesCursor {
+    id: uuid::Uuid,
+    sort_text: Option<String>,
+    sort_int: Option<i32>,
+    sort_timestamp: Option<DateTime<Utc>>,
+}
+
+#[derive(FromRow)]
+struct MyIssueRow {
+    id: uuid::Uuid,
+    project_key: String,
+    key_seq: i32,
+    title: String,
+    status: String,
+    priority: String,
+    created_at: DateTime<Utc>,
+    updated_at: DateTime<Utc>,
+}
+
+impl MyIssuesCursor {
+    fn from_row(sort_by: MyIssueSortBy, row: &MyIssueRow) -> Self {
+        match sort_by {
+            MyIssueSortBy::CreatedAt => Self {
+                id: row.id,
+                sort_text: None,
+                sort_int: None,
+                sort_timestamp: Some(row.created_at),
+            },
+            MyIssueSortBy::UpdatedAt => Self {
+                id: row.id,
+                sort_text: None,
+                sort_int: None,
+                sort_timestamp: Some(row.updated_at),
+            },
+            MyIssueSortBy::KeySeq => Self {
+                id: row.id,
+                sort_text: None,
+                sort_int: Some(row.key_seq),
+                sort_timestamp: None,
+            },
+            MyIssueSortBy::Title => Self {
+                id: row.id,
+                sort_text: Some(row.title.clone()),
+                sort_int: None,
+                sort_timestamp: None,
+            },
+            MyIssueSortBy::Status => Self {
+                id: row.id,
+                sort_text: Some(row.status.clone()),
+                sort_int: None,
+                sort_timestamp: None,
+            },
+            MyIssueSortBy::Priority => Self {
+                id: row.id,
+                sort_text: Some(row.priority.clone()),
+                sort_int: None,
+                sort_timestamp: None,
+            },
+        }
+    }
+}
+
+#[derive(Deserialize)]
+pub struct ListMyIssuesQuery {
+    pub limit: Option<i64>,
+    pub offset: Option<i64>,
+    pub cursor: Option<String>,
+    pub q: Option<String>,
+    pub status: Option<String>,
+    pub priority: Option<String>,
+    pub sort_by: Option<MyIssueSortBy>,
+    pub sort_dir: Option<SortDirection>,
+}
+
+#[derive(Serialize)]
+pub struct MyIssueItem {
+    pub id: uuid::Uuid,
+    pub display_key: String,
+    pub title: String,
+    pub status: String,
+    pub priority: String,
+}
+
+impl MyIssueItem {
+    fn from_row(row: MyIssueRow) -> Self {
+        Self {
+            id: row.id,
+            display_key: format!("{}-{}", row.project_key, row.key_seq),
+            title: row.title,
+            status: row.status,
+            priority: row.priority,
+        }
+    }
+}
+
+#[derive(Debug, Default, Serialize)]
+pub struct MyIssueFacets {
+    pub status: HashMap<String, i64>,
+    pub priority: HashMap<String, i64>,
+}
+
+#[derive(FromRow)]
+struct FacetRow {
+    value: String,
+    count: i64,
+}
+
+#[derive(Serialize)]
+pub struct ListMyIssuesResponse {
+    pub items: Vec<MyIssueItem>,
+    pub total: i64,
+    pub limit: i64,
+    pub offset: i64,
+    pub next_cursor: Option<String>,
+    pub has_more: bool,
+    pub sort_by: MyIssueSortBy,
+    pub sort_dir: SortDirection,
+    pub facets: MyIssueFacets,
+}
+
+fn apply_my_issues_filters(
+    builder: &mut QueryBuilder<Postgres>,
+    query: &ListMyIssuesQuery,
+    exclude_facet: Option<&str>,
+) {
+    if exclude_facet != Some("status") {
+        if let Some(s) = query.status.as_deref() {
+            let values: Vec<&str> = s.split(',').map(str::trim).filter(|x| !x.is_empty()).collect();
+            if !values.is_empty() {
+                builder.push(" AND i.status IN (");
+                for (i, v) in values.iter().enumerate() {
+                    if i > 0 {
+                        builder.push(", ");
+                    }
+                    builder.push_bind((*v).to_string());
+                }
+                builder.push(")");
+            }
+        }
+    }
+
+    if exclude_facet != Some("priority") {
+        if let Some(s) = query.priority.as_deref() {
+            let values: Vec<&str> = s.split(',').map(str::trim).filter(|x| !x.is_empty()).collect();
+            if !values.is_empty() {
+                builder.push(" AND i.priority IN (");
+                for (i, v) in values.iter().enumerate() {
+                    if i > 0 {
+                        builder.push(", ");
+                    }
+                    builder.push_bind((*v).to_string());
+                }
+                builder.push(")");
+            }
+        }
+    }
+
+    if let Some(search) = query.q.as_deref() {
+        if !search.trim().is_empty() {
+            builder
+                .push(" AND (i.title ILIKE '%' || ")
+                .push_bind(search.to_string())
+                .push(" || '%' OR COALESCE(i.description, '') ILIKE '%' || ")
+                .push_bind(search.to_string())
+                .push(" || '%')");
+        }
+    }
+}
+
+fn apply_my_issues_cursor_filter(
+    builder: &mut QueryBuilder<Postgres>,
+    sort_by: MyIssueSortBy,
+    sort_dir: SortDirection,
+    cursor: &MyIssuesCursor,
+) -> Result<(), &'static str> {
+    let comparison = sort_dir.comparison_sql();
+
+    match sort_by {
+        MyIssueSortBy::KeySeq => {
+            let value = cursor
+                .sort_int
+                .ok_or("cursor is missing integer sort value")?;
+            builder
+                .push(" AND ((i.key_seq ")
+                .push(comparison)
+                .push(" ")
+                .push_bind(value)
+                .push(") OR (i.key_seq = ")
+                .push_bind(value)
+                .push(" AND i.id ")
+                .push(comparison)
+                .push(" ")
+                .push_bind(cursor.id)
+                .push("))");
+        }
+        MyIssueSortBy::CreatedAt | MyIssueSortBy::UpdatedAt => {
+            let value = cursor
+                .sort_timestamp
+                .ok_or("cursor is missing timestamp sort value")?;
+            let col = sort_by.as_sql();
+            builder
+                .push(" AND ((")
+                .push(col)
+                .push(" ")
+                .push(comparison)
+                .push(" ")
+                .push_bind(value)
+                .push(") OR (")
+                .push(col)
+                .push(" = ")
+                .push_bind(value)
+                .push(" AND i.id ")
+                .push(comparison)
+                .push(" ")
+                .push_bind(cursor.id)
+                .push("))");
+        }
+        MyIssueSortBy::Title | MyIssueSortBy::Status | MyIssueSortBy::Priority => {
+            let value = cursor
+                .sort_text
+                .as_deref()
+                .ok_or("cursor is missing text sort value")?
+                .to_string();
+            let col = sort_by.as_sql();
+            builder
+                .push(" AND ((")
+                .push(col)
+                .push(" ")
+                .push(comparison)
+                .push(" ")
+                .push_bind(value.clone())
+                .push(") OR (")
+                .push(col)
+                .push(" = ")
+                .push_bind(value)
+                .push(" AND i.id ")
+                .push(comparison)
+                .push(" ")
+                .push_bind(cursor.id)
+                .push("))");
+        }
+    }
+
+    Ok(())
+}
+
+async fn fetch_my_issues_facets(
+    pool: &sqlx::PgPool,
+    user_id: uuid::Uuid,
+    query: &ListMyIssuesQuery,
+) -> Result<MyIssueFacets, sqlx::Error> {
+    let mut facets = MyIssueFacets::default();
+
+    let mut status_builder = QueryBuilder::<Postgres>::new(
+        "SELECT i.status as value, COUNT(*) as count FROM issues i WHERE i.assignee_id = ",
+    );
+    status_builder.push_bind(user_id);
+    apply_my_issues_filters(&mut status_builder, query, Some("status"));
+    status_builder.push(" GROUP BY i.status");
+    let rows: Vec<FacetRow> = status_builder
+        .build_query_as::<FacetRow>()
+        .fetch_all(pool)
+        .await?;
+    for row in rows {
+        facets.status.insert(row.value, row.count);
+    }
+
+    let mut priority_builder = QueryBuilder::<Postgres>::new(
+        "SELECT i.priority as value, COUNT(*) as count FROM issues i WHERE i.assignee_id = ",
+    );
+    priority_builder.push_bind(user_id);
+    apply_my_issues_filters(&mut priority_builder, query, Some("priority"));
+    priority_builder.push(" GROUP BY i.priority");
+    let rows: Vec<FacetRow> = priority_builder
+        .build_query_as::<FacetRow>()
+        .fetch_all(pool)
+        .await?;
+    for row in rows {
+        facets.priority.insert(row.value, row.count);
+    }
+
+    Ok(facets)
+}
+
+pub async fn list_my_issues(
+    State(state): State<AppState>,
+    AuthUser(user_id): AuthUser,
+    Query(query): Query<ListMyIssuesQuery>,
+) -> impl IntoResponse {
+    let limit = query.limit.unwrap_or(50).clamp(1, 1_000);
+    let offset = query.offset.unwrap_or(0).max(0);
+    let sort_by = query.sort_by.unwrap_or_default();
+    let sort_dir = query.sort_dir.unwrap_or_default();
+
+    if query.cursor.is_some() && query.offset.is_some() {
+        return (
+            StatusCode::BAD_REQUEST,
+            "use either cursor or offset, not both",
+        )
+            .into_response();
+    }
+
+    let decoded_cursor = match query.cursor.as_deref() {
+        Some(raw) => match serde_json::from_str::<MyIssuesCursor>(raw) {
+            Ok(cursor) => Some(cursor),
+            Err(_) => return (StatusCode::BAD_REQUEST, "invalid cursor").into_response(),
+        },
+        None => None,
+    };
+
+    let mut count_query = QueryBuilder::<Postgres>::new(
+        "SELECT COUNT(*) FROM issues i WHERE i.assignee_id = ",
+    );
+    count_query.push_bind(user_id);
+    apply_my_issues_filters(&mut count_query, &query, None);
+
+    let total = match count_query
+        .build_query_scalar::<i64>()
+        .fetch_one(&state.db)
+        .await
+    {
+        Ok(total) => total,
+        Err(error) => {
+            eprintln!("list_my_issues count error: {error:?}");
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
+    };
+
+    let facets = match fetch_my_issues_facets(&state.db, user_id, &query).await {
+        Ok(f) => f,
+        Err(error) => {
+            eprintln!("list_my_issues facet count error: {error:?}");
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
+    };
+
+    let mut items_query = QueryBuilder::<Postgres>::new(
+        "SELECT i.id, p.project_key, i.key_seq, i.title, i.status, i.priority, i.created_at, i.updated_at \
+         FROM issues i \
+         JOIN projects p ON p.id = i.project_id \
+         WHERE i.assignee_id = ",
+    );
+    items_query.push_bind(user_id);
+    apply_my_issues_filters(&mut items_query, &query, None);
+
+    if let Some(cursor) = decoded_cursor.as_ref() {
+        if let Err(error) = apply_my_issues_cursor_filter(&mut items_query, sort_by, sort_dir, cursor) {
+            return (StatusCode::BAD_REQUEST, error).into_response();
+        }
+    }
+
+    items_query
+        .push(" ORDER BY ")
+        .push(sort_by.as_sql())
+        .push(" ")
+        .push(sort_dir.as_sql())
+        .push(", i.id ")
+        .push(sort_dir.as_sql())
+        .push(" LIMIT ")
+        .push_bind(limit + 1);
+
+    if decoded_cursor.is_none() {
+        items_query.push(" OFFSET ").push_bind(offset);
+    }
+
+    let rows = match items_query
+        .build_query_as::<MyIssueRow>()
+        .fetch_all(&state.db)
+        .await
+    {
+        Ok(rows) => rows,
+        Err(error) => {
+            eprintln!("list_my_issues query error: {error:?}");
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
+    };
+
+    let has_more = rows.len() as i64 > limit;
+    let mut rows = rows;
+
+    if has_more {
+        rows.pop();
+    }
+
+    let next_cursor = if has_more {
+        match rows.last() {
+            Some(last_row) => {
+                match serde_json::to_string(&MyIssuesCursor::from_row(sort_by, last_row)) {
+                    Ok(cursor) => Some(cursor),
+                    Err(error) => {
+                        eprintln!("list_my_issues cursor encode error: {error:?}");
+                        return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+                    }
+                }
+            }
+            None => None,
+        }
+    } else {
+        None
+    };
+
+    let items = rows.into_iter().map(MyIssueItem::from_row).collect();
+
+    (
+        StatusCode::OK,
+        Json(ListMyIssuesResponse {
+            items,
+            total,
+            limit,
+            offset,
+            next_cursor,
+            has_more,
+            sort_by,
+            sort_dir,
+            facets,
+        }),
+    )
+        .into_response()
 }
 
 pub async fn list_issues(

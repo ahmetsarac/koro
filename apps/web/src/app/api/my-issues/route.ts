@@ -1,17 +1,25 @@
 import { NextRequest, NextResponse } from "next/server"
 
 import { getApiBaseUrl } from "@/lib/api/backend"
+import { ACCESS_TOKEN_COOKIE_NAME } from "@/lib/auth/constants"
 
 export async function GET(request: NextRequest) {
   try {
-    const apiUrl = new URL(`${getApiBaseUrl()}/demo/tasks`)
+    const apiUrl = new URL(`${getApiBaseUrl()}/my-issues`)
 
     request.nextUrl.searchParams.forEach((value, key) => {
       apiUrl.searchParams.set(key, value)
     })
 
+    const accessToken = request.cookies.get(ACCESS_TOKEN_COOKIE_NAME)?.value
+    const headers: HeadersInit = {}
+    if (accessToken) {
+      headers["Authorization"] = `Bearer ${accessToken}`
+    }
+
     const response = await fetch(apiUrl, {
       cache: "no-store",
+      headers,
     })
 
     const body = await response.text()
@@ -24,10 +32,10 @@ export async function GET(request: NextRequest) {
       },
     })
   } catch (error) {
-    console.error("Failed to proxy demo tasks request", error)
+    console.error("Failed to proxy my-issues request", error)
 
     return NextResponse.json(
-      { message: "Demo tasks request failed." },
+      { message: "My issues request failed." },
       { status: 500 }
     )
   }

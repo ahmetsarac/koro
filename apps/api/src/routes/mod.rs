@@ -8,7 +8,6 @@ use tracing::Level;
 
 mod auth;
 mod comments;
-mod demo;
 mod events;
 mod health;
 mod invites;
@@ -21,7 +20,7 @@ mod setup;
 pub fn router(state: AppState) -> Router {
     Router::new()
         .route("/health", get(health::health))
-        .route("/demo/tasks", get(demo::list_demo_tasks))
+        .route("/my-issues", get(issues::list_my_issues))
         .route("/setup", post(setup::setup))
         .route("/orgs", post(orgs::create_org))
         .route("/orgs/{orgId}/invites", post(invites::create_invite))

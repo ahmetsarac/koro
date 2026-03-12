@@ -7,14 +7,13 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { DataTableViewOptions } from "./data-table-view-options"
 
-import { labels, priorities, statuses } from "../data/data"
-import { type DemoTaskFacets } from "../data/schema"
+import { priorities, statuses } from "../data/data"
+import { type IssueFacets } from "../data/schema"
 import { DataTableFacetedFilter } from "./data-table-faceted-filter"
 
 interface DataTableToolbarProps<TData> {
   table: Table<TData>
-  /** Server-side facet counts (from full result set); when set, filter dropdowns show these instead of client-loaded counts */
-  facets?: DemoTaskFacets | null
+  facets?: IssueFacets | null
 }
 
 export function DataTableToolbar<TData>({
@@ -27,7 +26,7 @@ export function DataTableToolbar<TData>({
     <div className="flex items-center justify-between">
       <div className="flex flex-1 items-center gap-2">
         <Input
-          placeholder="Filter tasks..."
+          placeholder="Filter issues..."
           value={(table.getColumn("title")?.getFilterValue() as string) ?? ""}
           onChange={(event) =>
             table.getColumn("title")?.setFilterValue(event.target.value)
@@ -40,14 +39,6 @@ export function DataTableToolbar<TData>({
             title="Status"
             options={statuses}
             facetCounts={facets?.status}
-          />
-        )}
-        {table.getColumn("label") && (
-          <DataTableFacetedFilter
-            column={table.getColumn("label")}
-            title="Label"
-            options={labels}
-            facetCounts={facets?.label}
           />
         )}
         {table.getColumn("priority") && (

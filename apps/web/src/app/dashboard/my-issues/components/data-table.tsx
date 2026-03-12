@@ -21,34 +21,25 @@ import {
 } from "@/components/ui/table"
 
 import { DataTableToolbar } from "./data-table-toolbar"
-import { Button } from "@/components/ui/button"
-import { Grip, X } from "lucide-react"
-import { Separator } from "@/components/ui/separator"
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
-import {
-  fetchDemoTasks,
-  type DemoTaskSortBy,
-  type FetchDemoTasksParams,
-} from "@/lib/demo-tasks"
+  fetchMyIssues,
+  type IssueSortBy,
+  type FetchMyIssuesParams,
+} from "@/lib/my-issues"
 
-import { type DemoTaskFacets, type Task } from "../data/schema"
+import { type IssueFacets, type Issue } from "../data/schema"
+import { DataTableSelectionOverlay } from "./data-table-selection-overlay"
 
 const ROW_HEIGHT = 49
 const OVERSCAN = 2
 const PAGE_SIZE = 50
 const LOAD_MORE_THRESHOLD = 300
 
-/** Kolon id → backend sort_by. Backend: sort_order | created_at | id | title | status | label | priority */
-const COLUMN_TO_SORT_BY: Record<string, DemoTaskSortBy> = {
-  id: "id",
+/** Kolon id → backend sort_by. Backend: created_at | updated_at | key_seq | title | status | priority */
+const COLUMN_TO_SORT_BY: Record<string, IssueSortBy> = {
+  id: "key_seq",
   title: "title",
   status: "status",
-  label: "label",
   priority: "priority",
 }
 
@@ -56,8 +47,8 @@ function buildFetchParams(
   sorting: SortingState,
   columnFilters: ColumnFiltersState,
   cursor: string | null
-): FetchDemoTasksParams {
-  const params: FetchDemoTasksParams = {
+): FetchMyIssuesParams {
+  const params: FetchMyIssuesParams = {
     limit: PAGE_SIZE,
     ...(cursor ? { cursor } : { offset: 0 }),
   }
@@ -77,8 +68,6 @@ function buildFetchParams(
       params.status = Array.isArray(v) ? (v as string[]) : [v as string]
     } else if (f.id === "priority") {
       params.priority = Array.isArray(v) ? (v as string[]) : [v as string]
-    } else if (f.id === "label") {
-      params.label = Array.isArray(v) ? (v as string[]) : [v as string]
     }
   }
 
@@ -86,11 +75,11 @@ function buildFetchParams(
 }
 
 interface DataTableProps {
-  columns: ColumnDef<Task, unknown>[]
+  columns: ColumnDef<Issue, unknown>[]
 }
 
 export function DataTable({ columns }: DataTableProps) {
-  const [items, setItems] = React.useState<Task[]>([])
+  const [items, setItems] = React.useState<Issue[]>([])
   const [nextCursor, setNextCursor] = React.useState<string | null>(null)
   const [total, setTotal] = React.useState(0)
   const [hasMore, setHasMore] = React.useState(true)
@@ -107,7 +96,7 @@ export function DataTable({ columns }: DataTableProps) {
   const [sorting, setSorting] = React.useState<SortingState>([])
   const [scrollTop, setScrollTop] = React.useState(0)
   const [containerHeight, setContainerHeight] = React.useState(0)
-  const [facets, setFacets] = React.useState<DemoTaskFacets | null>(null)
+  const [facets, setFacets] = React.useState<IssueFacets | null>(null)
 
   const scrollContainerRef = React.useRef<HTMLDivElement>(null)
 
@@ -125,7 +114,7 @@ export function DataTable({ columns }: DataTableProps) {
         setError(null)
 
         const params = buildFetchParams(sorting, columnFilters, null)
-        const res = await fetchDemoTasks(params)
+        const res = await fetchMyIssues(params)
 
         if (cancelled) return
 
@@ -137,7 +126,7 @@ export function DataTable({ columns }: DataTableProps) {
       } catch (e) {
         if (!cancelled) {
           setError(
-            e instanceof Error ? e.message : "Failed to load demo tasks."
+            e instanceof Error ? e.message : "Failed to load issues."
           )
         }
       } finally {
@@ -172,7 +161,7 @@ export function DataTable({ columns }: DataTableProps) {
       setIsFetchingMore(true)
 
       const params = buildFetchParams(sorting, columnFilters, nextCursor)
-      const res = await fetchDemoTasks(params)
+      const res = await fetchMyIssues(params)
 
       setItems((prev) => [...prev, ...res.items])
       setTotal(res.total)
@@ -259,11 +248,11 @@ export function DataTable({ columns }: DataTableProps) {
   )
 
   return (
-    <div className="flex flex-1 min-h-0 flex-col gap-4">
+    <div className="flex min-h-0 flex-1 flex-col gap-4">
       <DataTableToolbar table={table} facets={facets} />
 
-      <div className="relative min-h-0 flex-1 flex flex-col rounded-md border overflow-hidden">
-        <SelectionOverlay
+      <div className="relative flex max-h-full min-h-0 flex-col rounded-md border overflow-hidden">
+        <DataTableSelectionOverlay
           selectedCount={selectedCount}
           onClearSelection={() => table.resetRowSelection()}
         />
@@ -294,7 +283,7 @@ export function DataTable({ columns }: DataTableProps) {
 
         <div
           ref={scrollContainerRef}
-          className="relative overflow-y-auto flex-1 min-h-0"
+          className="relative overflow-y-auto min-h-0"
           onScroll={handleScroll}
         >
           <table className="w-full text-xs" style={{ tableLayout: "fixed" }}>
@@ -306,7 +295,7 @@ export function DataTable({ columns }: DataTableProps) {
                     colSpan={visibleColumnCount}
                     className="h-24 text-center"
                   >
-                    Loading demo tasks...
+                    Loading issues...
                   </TableCell>
                 </TableRow>
               ) : error ? (
@@ -389,55 +378,3 @@ export function DataTable({ columns }: DataTableProps) {
   )
 }
 
-function SelectionOverlay({
-  selectedCount,
-  onClearSelection,
-}: {
-  selectedCount: number
-  onClearSelection: () => void
-}) {
-  if (selectedCount === 0) return null
-
-  return (
-    <div className="pointer-events-none absolute inset-x-0 bottom-4 z-20 flex justify-center px-4">
-      <div className="pointer-events-auto flex items-center gap-1 rounded-lg border border-white/10 bg-sidebar p-1.5 text-white shadow-[0_4px_8px_rgba(0,0,0,0.28)] backdrop-blur-xl">
-        <div className="flex items-center gap-0">
-          <div className="flex h-7 items-center rounded-l-md border border-r-0 border-dashed border-sidebar-border bg-sidebar px-2 text-xs font-medium tracking-tight text-foreground">
-            {selectedCount} selected
-          </div>
-          <Button
-            size="icon"
-            className="size-7 rounded-l-none rounded-r-md border border-dashed border-sidebar-border bg-sidebar text-foreground hover:bg-background/90 hover:text-foreground"
-            onClick={onClearSelection}
-          >
-            <X />
-            <span className="sr-only">Clear selection</span>
-          </Button>
-        </div>
-
-        <Separator
-          orientation="vertical"
-          className="mx-1 h-5 data-vertical:self-auto"
-        />
-
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button className="rounded-md border border-sidebar-border bg-sidebar px-3 text-foreground hover:bg-background/90 hover:text-foreground">
-              <Grip />
-              Actions
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent
-            align="center"
-            side="top"
-            sideOffset={12}
-            className="min-w-24"
-          >
-            <DropdownMenuItem>Edit</DropdownMenuItem>
-            <DropdownMenuItem>Delete</DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
-    </div>
-  )
-}
