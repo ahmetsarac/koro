@@ -13,10 +13,20 @@ import {
   SidebarHeader,
   SidebarRail,
 } from "@/components/ui/sidebar"
-import { GalleryVerticalEndIcon, AudioLinesIcon, TerminalIcon, TerminalSquareIcon, BotIcon, BookOpenIcon, Settings2Icon, FrameIcon, PieChartIcon, MapIcon, Layers, Crosshair, Boxes, Settings, BlocksIcon, KeyRoundIcon, WorkflowIcon } from "lucide-react"
+import {
+  GalleryVerticalEndIcon,
+  AudioLinesIcon,
+  TerminalIcon,
+  BookOpenIcon,
+  Crosshair,
+  Boxes,
+  Settings,
+  BlocksIcon,
+  KeyRoundIcon,
+  WorkflowIcon,
+} from "lucide-react"
 
-// This is sample data.
-const data = {
+const staticData = {
   user: {
     name: "shadcn",
     email: "m@example.com",
@@ -25,101 +35,98 @@ const data = {
   organizations: [
     {
       name: "Acme Inc",
-      logo: (
-        <GalleryVerticalEndIcon
-        />
-      ),
+      slug: "acme",
+      logo: <GalleryVerticalEndIcon />,
       plan: "Enterprise",
     },
     {
       name: "Acme Corp.",
-      logo: (
-        <AudioLinesIcon
-        />
-      ),
+      slug: "acme-corp",
+      logo: <AudioLinesIcon />,
       plan: "Startup",
     },
     {
       name: "Evil Corp.",
-      logo: (
-        <TerminalIcon
-        />
-      ),
+      slug: "evil-corp",
+      logo: <TerminalIcon />,
       plan: "Free",
     },
   ],
-  navMain: [
+}
+
+function getNavItems(orgSlug: string) {
+  return [
     {
       title: "My Issues",
-      url: "/dashboard/my-issues",
-      icon: (
-        <Crosshair
-        />
-      )
+      url: `/org/${orgSlug}/my-issues`,
+      icon: <Crosshair />,
     },
     {
       title: "Projects",
-      url: "/dashboard/projects",
-      icon: (
-        <Boxes
-        />
-      ),
+      url: `/org/${orgSlug}/projects`,
+      icon: <Boxes />,
     },
     {
       title: "Activity",
-      url: "/dashboard/activity",
-      icon: (
-        <BookOpenIcon
-        />
-      ),
+      url: `/org/${orgSlug}/activity`,
+      icon: <BookOpenIcon />,
     },
     {
       title: "Settings",
-      url: "/dashboard/settings",
-      icon: (
-        <Settings
-        />
-      ),
+      url: `/org/${orgSlug}/settings`,
+      icon: <Settings />,
     },
-  ],
-  //projects: [],
-  projects: [
+  ]
+}
+
+function getProjects(orgSlug: string) {
+  return [
     {
       name: "Core Platform",
       key: "KORO",
-      url: "/dashboard/projects#koro",
+      url: `/org/${orgSlug}/projects/KORO`,
       icon: <BlocksIcon />,
       openIssueCount: 24,
     },
     {
       name: "Authentication",
       key: "AUTH",
-      url: "/dashboard/projects#auth",
+      url: `/org/${orgSlug}/projects/AUTH`,
       icon: <KeyRoundIcon />,
       openIssueCount: 9,
     },
     {
       name: "Workflow Engine",
       key: "FLOW",
-      url: "/dashboard/projects#flow",
+      url: `/org/${orgSlug}/projects/FLOW`,
       icon: <WorkflowIcon />,
       openIssueCount: 13,
     },
-  ],
+  ]
 }
 
-export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
+interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
+  orgSlug: string
+}
+
+export function AppSidebar({ orgSlug, ...props }: AppSidebarProps) {
+  const navItems = getNavItems(orgSlug)
+  const projects = getProjects(orgSlug)
+
   return (
     <Sidebar collapsible="icon" {...props}>
       <SidebarHeader>
-        <OrganizationSwitcher organizations={data.organizations} />
+        <OrganizationSwitcher
+          organizations={staticData.organizations}
+          currentOrgSlug={orgSlug}
+        />
       </SidebarHeader>
       <SidebarContent>
-        <NavMain items={data.navMain} />
-        <NavProjects projects={data.projects} />
+        <NavMain items={navItems} />
+        <NavProjects projects={projects} />
       </SidebarContent>
       <SidebarFooter>
-        <NavUser user={data.user} />
+        <NavUser user={staticData.user} />
       </SidebarFooter>
       <SidebarRail />
     </Sidebar>

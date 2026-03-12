@@ -21,6 +21,7 @@ pub fn router(state: AppState) -> Router {
     Router::new()
         .route("/health", get(health::health))
         .route("/my-issues", get(issues::list_my_issues))
+        .route("/projects", get(projects::list_projects))
         .route("/setup", post(setup::setup))
         .route("/orgs", post(orgs::create_org))
         .route("/orgs/{orgId}/invites", post(invites::create_invite))
@@ -31,6 +32,10 @@ pub fn router(state: AppState) -> Router {
         .route("/orgs/{orgId}/projects", post(projects::create_project))
         .route("/projects/{projectId}/issues", post(issues::create_issue))
         .route("/projects/{projectId}/issues", get(issues::list_issues))
+        .route(
+            "/orgs/{orgSlug}/projects/{projectKey}",
+            get(projects::get_project),
+        )
         .route(
             "/orgs/{orgSlug}/projects/{projectKey}/members",
             get(projects::list_project_members),

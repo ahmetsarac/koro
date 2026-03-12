@@ -1,6 +1,6 @@
 import { AppSidebar } from "@/components/app-sidebar"
+import { OrgBreadcrumb } from "@/components/org-breadcrumb"
 import { ThemeToggle } from "@/components/theme-toggle"
-import { DashboardBreadcrumb } from "@/components/dashboard-breadcrumb"
 import { Separator } from "@/components/ui/separator"
 import {
   SidebarInset,
@@ -8,19 +8,27 @@ import {
   SidebarTrigger,
 } from "@/components/ui/sidebar"
 
-export default function DashboardLayout({children}: {children: React.ReactNode}) {
+export default async function OrgLayout({
+  children,
+  params,
+}: {
+  children: React.ReactNode
+  params: Promise<{ orgSlug: string }>
+}) {
+  const { orgSlug } = await params
+
   return (
     <SidebarProvider>
-      <AppSidebar />
+      <AppSidebar orgSlug={orgSlug} />
       <SidebarInset>
         <header className="sticky top-0 z-20 flex h-12 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12 bg-background border-b">
           <div className="flex items-center gap-2 px-6">
             <SidebarTrigger className="-ml-1" />
             <Separator
               orientation="vertical"
-              className="mr-2 data-[orientation=vertical]:h-4 data-vertical:self-auto"
+              className="mr-2 data-[orientation=vertical]:h-4"
             />
-            <DashboardBreadcrumb />
+            <OrgBreadcrumb />
           </div>
           <div className="ml-auto px-3">
             <ThemeToggle />

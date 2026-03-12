@@ -256,7 +256,7 @@ export function DataTable({ columns, filterType }: DataTableProps) {
     <div className="flex min-h-0 flex-1 flex-col gap-4">
       <DataTableToolbar table={table} facets={facets} />
 
-      <div className="relative flex max-h-full min-h-0 flex-col rounded-md border overflow-hidden">
+      <div className="relative flex max-h-full min-h-0 flex-1 flex-col rounded-md border overflow-hidden">
         <DataTableSelectionOverlay
           selectedCount={selectedCount}
           onClearSelection={() => table.resetRowSelection()}
@@ -288,7 +288,7 @@ export function DataTable({ columns, filterType }: DataTableProps) {
 
         <div
           ref={scrollContainerRef}
-          className="relative overflow-y-auto min-h-0"
+          className="relative flex-1 overflow-y-auto min-h-0"
           onScroll={handleScroll}
         >
           <table className="w-full text-xs" style={{ tableLayout: "fixed" }}>

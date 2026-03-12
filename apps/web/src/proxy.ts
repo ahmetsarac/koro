@@ -2,7 +2,7 @@ import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 
 import { AuthApiError, refreshWithApi } from "@/lib/auth/backend";
-import { DASHBOARD_HOME } from "@/lib/auth/constants";
+import { DEFAULT_ORG_HOME } from "@/lib/auth/constants";
 import {
   ACCESS_TOKEN_COOKIE_NAME,
   REFRESH_TOKEN_COOKIE_NAME,
@@ -25,7 +25,7 @@ function buildLoginUrl(request: NextRequest) {
   const loginUrl = new URL("/login", request.url);
   const nextPath = `${request.nextUrl.pathname}${request.nextUrl.search}`;
 
-  if (nextPath !== DASHBOARD_HOME) {
+  if (nextPath !== DEFAULT_ORG_HOME) {
     loginUrl.searchParams.set("next", nextPath);
   }
 
@@ -44,7 +44,7 @@ export async function proxy(request: NextRequest) {
 
   if (pathname === "/login") {
     if (accessClaims) {
-      return NextResponse.redirect(new URL(DASHBOARD_HOME, request.url));
+      return NextResponse.redirect(new URL(DEFAULT_ORG_HOME, request.url));
     }
 
     if (refreshToken) {
@@ -105,5 +105,5 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/login", "/dashboard", "/dashboard/:path*"],
+  matcher: ["/login", "/org/:path*"],
 };

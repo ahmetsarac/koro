@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import { useRouter } from "next/navigation"
 
 import {
   DropdownMenu,
@@ -19,20 +20,30 @@ import {
 } from "@/components/ui/sidebar"
 import { ChevronsUpDownIcon, PlusIcon } from "lucide-react"
 
+interface Organization {
+  name: string
+  slug: string
+  logo: React.ReactNode
+  plan: string
+}
+
 export function OrganizationSwitcher({
   organizations,
+  currentOrgSlug,
 }: {
-  organizations: {
-    name: string
-    logo: React.ReactNode
-    plan: string
-  }[]
+  organizations: Organization[]
+  currentOrgSlug: string
 }) {
-  const { isMobile } = useSidebar()
-  const [activeOrganization, setActiveOrganization] = React.useState(organizations[0])
+  const router = useRouter()
+  const activeOrganization =
+    organizations.find((org) => org.slug === currentOrgSlug) || organizations[0]
 
   if (!activeOrganization) {
     return null
+  }
+
+  function handleOrgSwitch(org: Organization) {
+    router.push(`/org/${org.slug}/my-issues`)
   }
 
   return (
@@ -48,7 +59,9 @@ export function OrganizationSwitcher({
                 {activeOrganization.logo}
               </div>
               <div className="grid flex-1 text-left text-sm leading-tight">
-                <span className="truncate font-medium">{activeOrganization.name}</span>
+                <span className="truncate font-medium">
+                  {activeOrganization.name}
+                </span>
                 <span className="truncate text-xs">{activeOrganization.plan}</span>
               </div>
               <ChevronsUpDownIcon className="ml-auto" />
@@ -65,8 +78,8 @@ export function OrganizationSwitcher({
             </DropdownMenuLabel>
             {organizations.map((organization, index) => (
               <DropdownMenuItem
-                key={organization.name}
-                onClick={() => setActiveOrganization(organization)}
+                key={organization.slug}
+                onClick={() => handleOrgSwitch(organization)}
                 className="gap-2 p-2"
               >
                 <div className="flex size-6 items-center justify-center rounded-md border">
@@ -81,7 +94,9 @@ export function OrganizationSwitcher({
               <div className="flex size-6 items-center justify-center rounded-md border bg-transparent">
                 <PlusIcon className="size-4" />
               </div>
-              <div className="font-medium text-muted-foreground">Add organization</div>
+              <div className="font-medium text-muted-foreground">
+                Add organization
+              </div>
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
