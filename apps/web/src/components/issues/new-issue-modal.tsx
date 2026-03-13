@@ -63,6 +63,8 @@ interface ProjectMember {
   project_role: string
 }
 
+const VALID_STATUSES = ["backlog", "todo", "in_progress", "blocked", "done"] as const
+
 export interface NewIssueModalProps {
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -71,6 +73,8 @@ export interface NewIssueModalProps {
   initialProjectKey?: string
   /** Display name when dropdown is disabled (e.g. from project page). */
   initialProjectName?: string
+  /** When provided (e.g. from kanban column plus), status is pre-selected. */
+  initialStatus?: string
 }
 
 export function NewIssueModal({
@@ -79,6 +83,7 @@ export function NewIssueModal({
   orgSlug,
   initialProjectKey,
   initialProjectName,
+  initialStatus: initialStatusProp,
 }: NewIssueModalProps) {
   const [projects, setProjects] = React.useState<Project[]>([])
   const [projectsLoading, setProjectsLoading] = React.useState(false)
@@ -120,6 +125,12 @@ export function NewIssueModal({
       cancelled = true
     }
   }, [open, orgSlug, initialProjectKey])
+
+  React.useEffect(() => {
+    if (open && initialStatusProp && VALID_STATUSES.includes(initialStatusProp as (typeof VALID_STATUSES)[number])) {
+      setStatus(initialStatusProp)
+    }
+  }, [open, initialStatusProp])
 
   React.useEffect(() => {
     if (!open || !selectedKey) return

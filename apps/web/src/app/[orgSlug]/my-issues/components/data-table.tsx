@@ -20,6 +20,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { IssueKanbanBoard } from "@/components/issues/issue-kanban-board"
+import { useNewIssueModal } from "@/components/issues/new-issue-modal-context"
 
 import { DataTableToolbar } from "./data-table-toolbar"
 import {
@@ -124,6 +125,7 @@ interface DataTableProps {
 }
 
 export function DataTable({ orgSlug, columns, filterType }: DataTableProps) {
+  const newIssueModal = useNewIssueModal()
   const [items, setItems] = React.useState<Issue[]>([])
   const [nextCursor, setNextCursor] = React.useState<string | null>(null)
   const [total, setTotal] = React.useState(0)
@@ -611,6 +613,7 @@ export function DataTable({ orgSlug, columns, filterType }: DataTableProps) {
               onIssueMove={({ issue, fromColumnId, toColumnId }) =>
                 handleBoardMove({ issue, fromColumnId, toColumnId })
               }
+              onAddIssue={(columnId) => newIssueModal?.openNewIssueModal(columnId)}
             />
           </div>
         )}

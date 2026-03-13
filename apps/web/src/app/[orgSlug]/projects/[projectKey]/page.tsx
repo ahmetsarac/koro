@@ -72,6 +72,7 @@ export default function ProjectDetailPage({
   const [isLoading, setIsLoading] = React.useState(true)
   const [error, setError] = React.useState<string | null>(null)
   const [newIssueOpen, setNewIssueOpen] = React.useState(false)
+  const [newIssueInitialStatus, setNewIssueInitialStatus] = React.useState<string | undefined>(undefined)
 
   React.useEffect(() => {
     async function load() {
@@ -136,10 +137,14 @@ export default function ProjectDetailPage({
         </Button>
         <NewIssueModal
           open={newIssueOpen}
-          onOpenChange={setNewIssueOpen}
+          onOpenChange={(open) => {
+            setNewIssueOpen(open)
+            if (!open) setNewIssueInitialStatus(undefined)
+          }}
           orgSlug={orgSlug}
           initialProjectKey={projectKey}
           initialProjectName={project.name}
+          initialStatus={newIssueInitialStatus}
         />
       </div>
 
@@ -185,7 +190,14 @@ export default function ProjectDetailPage({
         </TabsContent>
 
         <TabsContent value="board" className="mt-4 flex min-h-0 flex-1 flex-col">
-          <ProjectKanbanBoard orgSlug={orgSlug} projectKey={projectKey} />
+          <ProjectKanbanBoard
+            orgSlug={orgSlug}
+            projectKey={projectKey}
+            onAddIssue={(columnId: string) => {
+              setNewIssueInitialStatus(columnId)
+              setNewIssueOpen(true)
+            }}
+          />
         </TabsContent>
 
         <TabsContent value="members" className="mt-4 flex min-h-0 flex-1 flex-col">

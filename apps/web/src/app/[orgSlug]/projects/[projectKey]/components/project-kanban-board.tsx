@@ -26,9 +26,11 @@ const BOARD_COLUMNS = [
 export function ProjectKanbanBoard({
   orgSlug,
   projectKey,
+  onAddIssue,
 }: {
   orgSlug: string
   projectKey: string
+  onAddIssue?: (columnId: string) => void
 }) {
   const [columns, setColumns] = React.useState<Record<string, IssueListItem[]>>({})
   const [isLoading, setIsLoading] = React.useState(true)
@@ -108,6 +110,7 @@ export function ProjectKanbanBoard({
         handleIssueMove({ issueId, toColumnId, position })
       }
       onReload={fetchBoard}
+      onAddIssue={onAddIssue}
     />
   )
 }

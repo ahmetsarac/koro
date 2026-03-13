@@ -4,7 +4,7 @@ import * as React from "react"
 import { NewIssueModal } from "./new-issue-modal"
 
 const NewIssueModalContext = React.createContext<{
-  openNewIssueModal: () => void
+  openNewIssueModal: (initialStatus?: string) => void
 } | null>(null)
 
 export function useNewIssueModal() {
@@ -19,18 +19,29 @@ export function NewIssueModalProvider({
   children: React.ReactNode
 }) {
   const [open, setOpen] = React.useState(false)
+  const [initialStatus, setInitialStatus] = React.useState<string | undefined>(undefined)
   const value = React.useMemo(
-    () => ({ openNewIssueModal: () => setOpen(true) }),
+    () => ({
+      openNewIssueModal: (status?: string) => {
+        setInitialStatus(status)
+        setOpen(true)
+      },
+    }),
     []
   )
+  const handleOpenChange = React.useCallback((next: boolean) => {
+    setOpen(next)
+    if (!next) setInitialStatus(undefined)
+  }, [])
   return (
     <NewIssueModalContext.Provider value={value}>
       {children}
       <NewIssueModal
         open={open}
-        onOpenChange={setOpen}
+        onOpenChange={handleOpenChange}
         orgSlug={orgSlug}
         initialProjectKey={undefined}
+        initialStatus={initialStatus}
       />
     </NewIssueModalContext.Provider>
   )
