@@ -17,6 +17,8 @@ pub struct CreateIssueRequest {
     pub title: String,
     pub description: Option<String>,
     pub assignee_id: Option<uuid::Uuid>,
+    pub status: Option<String>,
+    pub priority: Option<String>,
 }
 #[derive(Serialize)]
 pub struct CreateIssueResponse {
@@ -116,11 +118,20 @@ pub async fn create_issue(
         }
     }
 
+    let status = req
+        .status
+        .as_deref()
+        .unwrap_or("backlog");
+    let priority = req
+        .priority
+        .as_deref()
+        .unwrap_or("none");
+
     // 4) insert issue
     let issue = match sqlx::query!(
         r#"
-        INSERT INTO issues (org_id, project_id, key_seq, title, description, reporter_id, assignee_id)
-        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        INSERT INTO issues (org_id, project_id, key_seq, title, description, reporter_id, assignee_id, status, priority)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
         RETURNING id, title
         "#,
         p.org_id,
@@ -129,7 +140,9 @@ pub async fn create_issue(
         req.title,
         req.description,
         user_id,
-        req.assignee_id
+        req.assignee_id,
+        status,
+        priority
     )
     .fetch_one(&mut *tx)
     .await
