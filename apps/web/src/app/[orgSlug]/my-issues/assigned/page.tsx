@@ -13,7 +13,7 @@ export default function AssignedIssuesPage({
   const { orgSlug } = use(params)
   const columns = createColumns(orgSlug)
   return (
-    <div className="flex min-h-0 flex-1 flex-col w-[calc(100svw-20rem)]">
+    <div className="flex min-h-0 flex-1 flex-col w-full min-w-0">
       <DataTable orgSlug={orgSlug} columns={columns} filterType="assigned" />
     </div>
   )
