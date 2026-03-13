@@ -19,7 +19,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { Button } from "@/components/ui/button"
 import { IssueKanbanBoard } from "@/components/issues/issue-kanban-board"
 
 import { DataTableToolbar } from "./data-table-toolbar"
@@ -268,6 +267,12 @@ export function DataTable({ orgSlug, columns, filterType }: DataTableProps) {
       setIsFetchingMore(false)
     }
   }, [nextCursor, hasMore, isFetchingMore, sorting, columnFilters, filterType])
+
+  // Board görünümünde tüm veriyi yükle (liste pagination ile devam eder)
+  React.useEffect(() => {
+    if (view !== "board" || !hasMore || isFetchingMore || !nextCursor) return
+    void loadMore()
+  }, [view, hasMore, isFetchingMore, nextCursor, loadMore])
 
   const table = useReactTable({
     data: items,
@@ -616,17 +621,6 @@ export function DataTable({ orgSlug, columns, filterType }: DataTableProps) {
           {total > 0 ? `${items.length} / ${total}` : "—"}
         </span>
         
-        {view === "board" && hasMore && !isFetchingMore && (
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="absolute right-2"
-            onClick={() => void loadMore()}
-          >
-            Load more
-          </Button>
-        )}
         {isFetchingMore && (
           <span className="absolute right-2 flex items-center text-xs">
             <RotateCw className="w-3 h-3 mr-1.5 animate-spin" />
