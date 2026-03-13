@@ -38,6 +38,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { updateIssueInCaches } from "@/lib/cache/issues-cache"
+import { DescriptionEditor } from "@/components/issues/description-editor"
 
 interface Issue {
   issue_id: string
@@ -684,12 +685,10 @@ export default function IssueDetailPage({
 
           {isEditingDescription ? (
             <div className="space-y-3">
-              <Textarea
+              <DescriptionEditor
                 value={editedDescription}
-                onChange={(e) => setEditedDescription(e.target.value)}
+                onChange={setEditedDescription}
                 placeholder="Add a description..."
-                className="min-h-[120px] text-sm"
-                disabled={isSavingDescription}
               />
               <div className="flex items-center gap-2">
                 <Button
@@ -714,9 +713,10 @@ export default function IssueDetailPage({
               </div>
             </div>
           ) : issue.description ? (
-            <div className="prose prose-sm dark:prose-invert max-w-none">
-              <p className="whitespace-pre-wrap">{issue.description}</p>
-            </div>
+            <div
+              className="prose prose-sm dark:prose-invert max-w-none [&_ul]:my-2 [&_ol]:my-2 [&_li]:my-0.5 [&_p]:my-1 [&_p:first-child]:mt-0 [&_p:last-child]:mb-0"
+              dangerouslySetInnerHTML={{ __html: issue.description }}
+            />
           ) : (
             <p
               className="text-muted-foreground text-sm italic cursor-pointer hover:text-foreground transition-colors"
