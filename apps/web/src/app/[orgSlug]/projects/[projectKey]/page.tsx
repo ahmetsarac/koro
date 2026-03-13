@@ -19,6 +19,7 @@ import {
 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
+import { NewIssueModal } from "@/components/issues/new-issue-modal"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { projectRoles } from "@/app/[orgSlug]/projects/data/data"
 import { ProjectKanbanBoard } from "./components/project-kanban-board"
@@ -70,6 +71,7 @@ export default function ProjectDetailPage({
   const [project, setProject] = React.useState<Project | null>(null)
   const [isLoading, setIsLoading] = React.useState(true)
   const [error, setError] = React.useState<string | null>(null)
+  const [newIssueOpen, setNewIssueOpen] = React.useState(false)
 
   React.useEffect(() => {
     async function load() {
@@ -128,10 +130,17 @@ export default function ProjectDetailPage({
           )}
         </div>
 
-        <Button data-icon="inline-start">
+        <Button data-icon="inline-start" onClick={() => setNewIssueOpen(true)}>
           <Plus className="h-4 w-4" />
           New Issue
         </Button>
+        <NewIssueModal
+          open={newIssueOpen}
+          onOpenChange={setNewIssueOpen}
+          orgSlug={orgSlug}
+          initialProjectKey={projectKey}
+          initialProjectName={project.name}
+        />
       </div>
 
       <div className="flex items-center gap-6 text-sm">

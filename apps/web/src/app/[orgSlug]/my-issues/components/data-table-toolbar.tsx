@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
 import { DataTableViewOptions } from "./data-table-view-options"
+import { useNewIssueModal } from "@/components/issues/new-issue-modal-context"
 
 import { priorities, statuses } from "../data/data"
 import { type IssueFacets } from "../data/schema"
@@ -26,6 +27,7 @@ export function DataTableToolbar<TData>({
   onViewChange,
 }: DataTableToolbarProps<TData>) {
   const isFiltered = table.getState().columnFilters.length > 0
+  const newIssueModal = useNewIssueModal()
 
   return (
     <div className="flex items-center justify-between">
@@ -95,7 +97,15 @@ export function DataTableToolbar<TData>({
             Board
           </Button>
         </div>
-        <Button data-icon="inline-start" size="lg"><PlusIcon />Create Issue</Button>
+        <Button
+          data-icon="inline-start"
+          size="lg"
+          type="button"
+          onClick={() => newIssueModal?.openNewIssueModal()}
+        >
+          <PlusIcon />
+          Create Issue
+        </Button>
       </div>
     </div>
   )
