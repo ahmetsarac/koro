@@ -149,7 +149,7 @@ export const createColumns = (orgSlug: string): ColumnDef<Issue>[] => [
             <button className="focus:outline-none">
               <Badge
                 variant="outline"
-                className="flex w-[110px] items-center gap-2 justify-start cursor-pointer hover:bg-muted/60"
+                className="flex w-fit items-center gap-2 justify-start cursor-pointer hover:bg-muted/60"
               >
                 {StatusIcon && (
                   <StatusIcon className="size-3.5 text-muted-foreground" />
@@ -230,7 +230,7 @@ export const createColumns = (orgSlug: string): ColumnDef<Issue>[] => [
             <button className="focus:outline-none">
               <Badge
                 variant="outline"
-                className="flex w-[110px] items-center gap-2 justify-start cursor-pointer hover:bg-muted/60"
+                className="flex w-fit items-center gap-2 justify-start cursor-pointer hover:bg-muted/60"
               >
                 {PriorityIcon && (
                   <PriorityIcon className="size-3.5 text-muted-foreground" />
