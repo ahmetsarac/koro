@@ -30,7 +30,7 @@ export default async function OrgLayout({
             />
             <OrgBreadcrumb />
           </div>
-          <div className="ml-auto px-3">
+          <div className="ml-auto px-6">
             <ThemeToggle />
           </div>
         </header>
