@@ -1,3 +1,6 @@
+use std::sync::Arc;
+
+use object_store::aws::AmazonS3Builder;
 use tracing_subscriber;
 
 mod auth;
@@ -24,7 +27,11 @@ async fn main() -> anyhow::Result<()> {
 
     db::ping(&pool).await?;
 
-    let state = AppState { db: pool };
+    let upload_store = build_upload_store();
+    let state = AppState {
+        db: pool,
+        upload_store,
+    };
     let app = routes::router(state);
 
     let port: u16 = std::env::var("PORT")
@@ -40,4 +47,23 @@ async fn main() -> anyhow::Result<()> {
     axum::serve(listener, app).await?;
 
     Ok(())
+}
+
+fn build_upload_store() -> Option<Arc<object_store::aws::AmazonS3>> {
+    let endpoint = std::env::var("MINIO_ENDPOINT").ok()?;
+    let access_key = std::env::var("MINIO_ACCESS_KEY").ok()?;
+    let secret_key = std::env::var("MINIO_SECRET_KEY").ok()?;
+    let bucket = std::env::var("MINIO_BUCKET").ok()?;
+
+    let store = AmazonS3Builder::new()
+        .with_endpoint(endpoint)
+        .with_allow_http(true)
+        .with_region("us-east-1")
+        .with_bucket_name(&bucket)
+        .with_access_key_id(access_key)
+        .with_secret_access_key(secret_key)
+        .build()
+        .ok()?;
+
+    Some(Arc::new(store))
 }

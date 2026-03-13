@@ -3,11 +3,14 @@
 import * as React from "react"
 import { useEditor, EditorContent } from "@tiptap/react"
 import StarterKit from "@tiptap/starter-kit"
+import Image from "@tiptap/extension-image"
 import { cn } from "@/lib/utils"
 import { Toolbar, ToolbarGroup } from "@/components/tiptap-ui-primitive/toolbar"
 import { MarkButton } from "@/components/tiptap-ui/mark-button"
 import { ListButton } from "@/components/tiptap-ui/list-button"
 import { BlockquoteButton } from "@/components/tiptap-ui/blockquote-button"
+import { ImageUploadButton } from "@/components/tiptap-ui/image-upload-button"
+import { ImageUploadNode } from "@/components/tiptap-node/image-upload-node"
 
 export interface DescriptionEditorProps {
   value: string
@@ -16,15 +19,53 @@ export interface DescriptionEditorProps {
   className?: string
 }
 
+const MAX_IMAGE_SIZE = 10 * 1024 * 1024 // 10 MiB
+
+function buildUploadFn(): (
+  file: File,
+  onProgress?: (e: { progress: number }) => void,
+  signal?: AbortSignal
+) => Promise<string> {
+  return async (file, onProgress, signal) => {
+    const formData = new FormData()
+    formData.append("file", file)
+    const res = await fetch("/api/uploads", {
+      method: "POST",
+      body: formData,
+      credentials: "include",
+      signal,
+    })
+    if (!res.ok) {
+      const text = await res.text()
+      throw new Error(text || "Upload failed")
+    }
+    const data = (await res.json()) as { url: string }
+    onProgress?.({ progress: 100 })
+    return data.url
+  }
+}
+
 export function DescriptionEditor({
   value,
   onChange,
   placeholder = "Description (optional)",
   className,
 }: DescriptionEditorProps) {
+  const uploadFnRef = React.useRef(buildUploadFn())
+  const uploadFn = uploadFnRef.current
+
   const editor = useEditor(
     {
-      extensions: [StarterKit],
+      extensions: [
+        StarterKit,
+        Image.configure({ inline: false }),
+        ImageUploadNode.configure({
+          upload: uploadFn,
+          maxSize: MAX_IMAGE_SIZE,
+          limit: 1,
+          accept: "image/jpeg,image/png,image/gif,image/webp",
+        }),
+      ],
       content: value || "",
       editorProps: {
         attributes: {
@@ -43,7 +84,7 @@ export function DescriptionEditor({
     if (!editor) return
     const current = editor.getHTML()
     if (value !== current && (value === "" || value === "<p></p>")) {
-      editor.commands.setContent(value || "", false)
+      editor.commands.setContent(value || "", { emitUpdate: false })
     }
   }, [editor, value])
 
@@ -77,6 +118,7 @@ export function DescriptionEditor({
         </ToolbarGroup>
         <ToolbarGroup>
           <BlockquoteButton editor={editor} showTooltip={false} />
+          <ImageUploadButton editor={editor} showTooltip={false} />
         </ToolbarGroup>
       </Toolbar>
       <div className="min-h-0 flex-1 overflow-y-auto">

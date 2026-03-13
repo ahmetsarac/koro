@@ -1,5 +1,6 @@
 use crate::state::AppState;
 use axum::{
+    extract::DefaultBodyLimit,
     Router,
     routing::{delete, get, patch, post},
 };
@@ -16,11 +17,20 @@ mod orgs;
 mod projects;
 mod relations;
 mod setup;
+mod upload;
 mod users;
 
 pub fn router(state: AppState) -> Router {
     Router::new()
         .route("/health", get(health::health))
+        .route(
+            "/uploads",
+            post(upload::upload).layer(DefaultBodyLimit::max(11 * 1024 * 1024)), // 10 MiB uploads
+        )
+        .route(
+            "/uploads/attachments/{filename}",
+            get(upload::get_attachment),
+        )
         .route("/me", get(users::get_me))
         .route("/my-issues", get(issues::list_my_issues))
         .route("/projects", get(projects::list_projects))

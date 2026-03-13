@@ -456,29 +456,42 @@ export const ImageUploadNode: React.FC<NodeViewProps> = (props) => {
     if (urls.length > 0) {
       const pos = props.getPos()
 
-      if (isValidPosition(pos)) {
-        const imageNodes = urls.map((url, index) => {
-          const filename =
-            files[index]?.name.replace(/\.[^/.]+$/, "") || "unknown"
-          return {
-            type: extension.options.type,
-            attrs: {
-              ...extension.options,
-              src: url,
-              alt: filename,
-              title: filename,
-            },
-          }
-        })
-
-        props.editor
+      if (typeof pos === "number" && isValidPosition(pos)) {
+        const editor = props.editor
+        const imageType = extension.options.type
+        const deleteSuccess = editor
           .chain()
           .focus()
           .deleteRange({ from: pos, to: pos + props.node.nodeSize })
-          .insertContentAt(pos, imageNodes)
           .run()
 
-        focusNextNode(props.editor)
+        if (!deleteSuccess) return
+
+        if (imageType === "image" && urls.length === 1 && editor.commands.setImage) {
+          const filename = files[0]?.name.replace(/\.[^/.]+$/, "") || "unknown"
+          editor.chain().focus().setImage({
+            src: urls[0],
+            alt: filename,
+            title: filename,
+          }).run()
+        } else {
+          const imageNodes = urls.map((url, index) => {
+            const filename =
+              files[index]?.name.replace(/\.[^/.]+$/, "") || "unknown"
+            return {
+              type: imageType,
+              attrs: {
+                src: url,
+                alt: filename,
+                title: filename,
+                ...extension.options.HTMLAttributes,
+              },
+            }
+          })
+          const content = imageNodes.length === 1 ? imageNodes[0] : imageNodes
+          editor.chain().focus().insertContentAt(pos, content).run()
+        }
+        focusNextNode(editor)
       }
     }
   }

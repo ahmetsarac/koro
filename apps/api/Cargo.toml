@@ -5,7 +5,7 @@ edition = "2024"
 
 [dependencies]
 # Axum
-axum = "0.8"
+axum = { version = "0.8", features = ["multipart", "json"] }
 tokio = { version = "1", features = ["full"] }
 async-trait = "0.1.89"
 tower-http = { version = "0.6", features = ["trace"] }
@@ -39,5 +39,9 @@ hex = "0.4"
 
 # JWT
 jsonwebtoken = { version = "10", features = ["rust_crypto"] }
+
+# S3-compatible object storage (MinIO)
+object_store = { version = "0.13", features = ["aws"] }
+bytes = "1"
 
 
