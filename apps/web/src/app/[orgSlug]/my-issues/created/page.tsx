@@ -13,5 +13,5 @@ export default function CreatedIssuesPage({
   const { orgSlug } = use(params)
   const columns = createColumns(orgSlug)
 
-  return <DataTable columns={columns} filterType="created" />
+  return <DataTable orgSlug={orgSlug} columns={columns} filterType="created" />
 }

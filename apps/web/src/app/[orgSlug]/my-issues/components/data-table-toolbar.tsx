@@ -1,10 +1,11 @@
 "use client"
 
 import { type Table } from "@tanstack/react-table"
-import { PlusIcon, X } from "lucide-react"
+import { LayoutGrid, List, PlusIcon, X } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { cn } from "@/lib/utils"
 import { DataTableViewOptions } from "./data-table-view-options"
 
 import { priorities, statuses } from "../data/data"
@@ -14,11 +15,15 @@ import { DataTableFacetedFilter } from "./data-table-faceted-filter"
 interface DataTableToolbarProps<TData> {
   table: Table<TData>
   facets?: IssueFacets | null
+  view: "list" | "board"
+  onViewChange: (view: "list" | "board") => void
 }
 
 export function DataTableToolbar<TData>({
   table,
   facets = null,
+  view,
+  onViewChange,
 }: DataTableToolbarProps<TData>) {
   const isFiltered = table.getState().columnFilters.length > 0
 
@@ -62,6 +67,34 @@ export function DataTableToolbar<TData>({
       </div>
       <div className="flex items-center gap-2">
         <DataTableViewOptions table={table} />
+        <div className="inline-flex items-center rounded-md border bg-background p-0.5">
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className={cn(
+              "px-2",
+              view === "list" && "bg-muted text-foreground hover:bg-muted"
+            )}
+            onClick={() => onViewChange("list")}
+          >
+            <List />
+            List
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className={cn(
+              "px-2",
+              view === "board" && "bg-muted text-foreground hover:bg-muted"
+            )}
+            onClick={() => onViewChange("board")}
+          >
+            <LayoutGrid />
+            Board
+          </Button>
+        </div>
         <Button data-icon="inline-start" size="lg"><PlusIcon />Create Issue</Button>
       </div>
     </div>

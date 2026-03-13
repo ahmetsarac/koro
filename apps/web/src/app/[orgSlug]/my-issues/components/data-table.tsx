@@ -19,6 +19,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import { Button } from "@/components/ui/button"
+import { IssueKanbanBoard } from "@/components/issues/issue-kanban-board"
 
 import { DataTableToolbar } from "./data-table-toolbar"
 import {
@@ -29,9 +31,14 @@ import {
 } from "@/lib/my-issues"
 
 import { type IssueFacets, type Issue } from "../data/schema"
+import { statuses } from "../data/data"
 import { DataTableSelectionOverlay } from "./data-table-selection-overlay"
 import { RotateCw } from "lucide-react"
-import { myIssuesCache, type MyIssuesScrollState } from "@/lib/cache/issues-cache"
+import {
+  myIssuesCache,
+  type MyIssuesScrollState,
+  updateIssueInCaches,
+} from "@/lib/cache/issues-cache"
 
 const ROW_HEIGHT = 49
 const OVERSCAN = 2
@@ -100,12 +107,24 @@ function buildFetchParams(
   return params
 }
 
+async function updateIssueStatus(issueId: string, status: string): Promise<boolean> {
+  const response = await fetch(`/api/issues/${issueId}/status`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    credentials: "same-origin",
+    body: JSON.stringify({ status }),
+  })
+
+  return response.ok
+}
+
 interface DataTableProps {
+  orgSlug: string
   columns: ColumnDef<Issue, unknown>[]
   filterType: IssueFilterType
 }
 
-export function DataTable({ columns, filterType }: DataTableProps) {
+export function DataTable({ orgSlug, columns, filterType }: DataTableProps) {
   const [items, setItems] = React.useState<Issue[]>([])
   const [nextCursor, setNextCursor] = React.useState<string | null>(null)
   const [total, setTotal] = React.useState(0)
@@ -124,6 +143,7 @@ export function DataTable({ columns, filterType }: DataTableProps) {
   const [scrollTop, setScrollTop] = React.useState(0)
   const [containerHeight, setContainerHeight] = React.useState(0)
   const [facets, setFacets] = React.useState<IssueFacets | null>(null)
+  const [view, setView] = React.useState<"list" | "board">("list")
 
   const scrollContainerRef = React.useRef<HTMLDivElement>(null)
   const hasRestoredFromCacheRef = React.useRef(false)
@@ -325,6 +345,31 @@ export function DataTable({ columns, filterType }: DataTableProps) {
   const selectedCount = table.getSelectedRowModel().rows.length
   const visibleColumnCount =
     table.getVisibleLeafColumns().length || columns.length
+  const boardColumns = React.useMemo(
+    () =>
+      statuses.map((status) => ({
+        id: status.value,
+        label: status.label,
+        icon: status.icon,
+      })),
+    []
+  )
+  const boardItems = React.useMemo(() => {
+    const grouped = boardColumns.reduce<Record<string, Issue[]>>((acc, column) => {
+      acc[column.id] = []
+      return acc
+    }, {})
+
+    for (const item of rows.map((row) => row.original)) {
+      if (!grouped[item.status]) {
+        grouped[item.status] = []
+      }
+
+      grouped[item.status].push(item)
+    }
+
+    return grouped
+  }, [boardColumns, rows])
 
   const visibleCount =
     containerHeight > 0 ? Math.ceil(containerHeight / ROW_HEIGHT) : 12
@@ -370,124 +415,198 @@ export function DataTable({ columns, filterType }: DataTableProps) {
     </colgroup>
   )
 
+  const handleBoardMove = React.useCallback(
+    async ({
+      issue,
+      fromColumnId,
+      toColumnId,
+    }: {
+      issue: Issue
+      fromColumnId: string
+      toColumnId: string
+    }) => {
+      if (fromColumnId === toColumnId) {
+        return true
+      }
+
+      const previousStatus = issue.status
+
+      setItems((prev) =>
+        prev.map((item) =>
+          item.id === issue.id ? { ...item, status: toColumnId } : item
+        )
+      )
+
+      try {
+        const success = await updateIssueStatus(issue.id, toColumnId)
+
+        if (!success) {
+          setItems((prev) =>
+            prev.map((item) =>
+              item.id === issue.id ? { ...item, status: previousStatus } : item
+            )
+          )
+          return false
+        }
+
+        updateIssueInCaches(issue.display_key, { status: toColumnId })
+        return true
+      } catch {
+        setItems((prev) =>
+          prev.map((item) =>
+            item.id === issue.id ? { ...item, status: previousStatus } : item
+          )
+        )
+        return false
+      }
+    },
+    []
+  )
+
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4">
-      <DataTableToolbar table={table} facets={facets} />
+      <DataTableToolbar
+        table={table}
+        facets={facets}
+        view={view}
+        onViewChange={setView}
+      />
 
       <div className="relative flex max-h-full min-h-0 flex-1 flex-col rounded-md border overflow-hidden">
-        <DataTableSelectionOverlay
-          selectedCount={selectedCount}
-          onClearSelection={() => table.resetRowSelection()}
-        />
+        {view === "list" ? (
+          <>
+            <DataTableSelectionOverlay
+              selectedCount={selectedCount}
+              onClearSelection={() => table.resetRowSelection()}
+            />
 
-        <table className="w-full text-xs" style={{ tableLayout: "fixed" }}>
-          {colGroup}
-          <TableHeader>
-            {table.getHeaderGroups().map((headerGroup) => (
-              <TableRow key={headerGroup.id} className="border-none">
-                {headerGroup.headers.map((header) => (
-                  <TableHead
-                    key={header.id}
-                    colSpan={header.colSpan}
-                    className="bg-background shadow-[inset_0_-1px_0_0_var(--border)]"
-                  >
-                    {header.isPlaceholder
-                      ? null
-                      : flexRender(
-                          header.column.columnDef.header,
-                          header.getContext()
-                        )}
-                  </TableHead>
+            <table className="w-full text-xs" style={{ tableLayout: "fixed" }}>
+              {colGroup}
+              <TableHeader>
+                {table.getHeaderGroups().map((headerGroup) => (
+                  <TableRow key={headerGroup.id} className="border-none">
+                    {headerGroup.headers.map((header) => (
+                      <TableHead
+                        key={header.id}
+                        colSpan={header.colSpan}
+                        className="bg-background shadow-[inset_0_-1px_0_0_var(--border)]"
+                      >
+                        {header.isPlaceholder
+                          ? null
+                          : flexRender(
+                              header.column.columnDef.header,
+                              header.getContext()
+                            )}
+                      </TableHead>
+                    ))}
+                  </TableRow>
                 ))}
-              </TableRow>
-            ))}
-          </TableHeader>
-        </table>
+              </TableHeader>
+            </table>
 
-        <div
-          ref={scrollContainerRef}
-          className="relative flex-1 overflow-y-auto min-h-0"
-          onScroll={handleScroll}
-        >
-          <table className="w-full text-xs" style={{ tableLayout: "fixed" }}>
-            {colGroup}
-            <TableBody>
-              {isInitialLoading ? (
-                <TableRow>
-                  <TableCell
-                    colSpan={visibleColumnCount}
-                    className="h-24 text-center"
-                  >
-                    Loading issues...
-                  </TableCell>
-                </TableRow>
-              ) : error ? (
-                <TableRow>
-                  <TableCell
-                    colSpan={visibleColumnCount}
-                    className="h-24 text-center text-destructive"
-                  >
-                    {error}
-                  </TableCell>
-                </TableRow>
-              ) : rows.length ? (
-                <>
-                  {topSpacerHeight > 0 && (
-                    <TableRow
-                      aria-hidden="true"
-                      className="hover:bg-transparent"
-                    >
+            <div
+              ref={scrollContainerRef}
+              className="relative flex-1 overflow-y-auto min-h-0"
+              onScroll={handleScroll}
+            >
+              <table className="w-full text-xs" style={{ tableLayout: "fixed" }}>
+                {colGroup}
+                <TableBody>
+                  {isInitialLoading ? (
+                    <TableRow>
                       <TableCell
                         colSpan={visibleColumnCount}
-                        className="p-0"
-                        style={{ height: topSpacerHeight }}
-                      />
+                        className="h-24 text-center"
+                      >
+                        Loading issues...
+                      </TableCell>
                     </TableRow>
-                  )}
+                  ) : error ? (
+                    <TableRow>
+                      <TableCell
+                        colSpan={visibleColumnCount}
+                        className="h-24 text-center text-destructive"
+                      >
+                        {error}
+                      </TableCell>
+                    </TableRow>
+                  ) : rows.length ? (
+                    <>
+                      {topSpacerHeight > 0 && (
+                        <TableRow
+                          aria-hidden="true"
+                          className="hover:bg-transparent"
+                        >
+                          <TableCell
+                            colSpan={visibleColumnCount}
+                            className="p-0"
+                            style={{ height: topSpacerHeight }}
+                          />
+                        </TableRow>
+                      )}
 
-                  {visibleRows.map((row) => (
-                    <TableRow
-                      key={row.id}
-                      data-state={row.getIsSelected() && "selected"}
-                      style={{ height: ROW_HEIGHT }}
-                    >
-                      {row.getVisibleCells().map((cell) => (
-                        <TableCell key={cell.id}>
-                          {flexRender(
-                            cell.column.columnDef.cell,
-                            cell.getContext()
-                          )}
-                        </TableCell>
+                      {visibleRows.map((row) => (
+                        <TableRow
+                          key={row.id}
+                          data-state={row.getIsSelected() && "selected"}
+                          style={{ height: ROW_HEIGHT }}
+                        >
+                          {row.getVisibleCells().map((cell) => (
+                            <TableCell key={cell.id}>
+                              {flexRender(
+                                cell.column.columnDef.cell,
+                                cell.getContext()
+                              )}
+                            </TableCell>
+                          ))}
+                        </TableRow>
                       ))}
-                    </TableRow>
-                  ))}
 
-                  {bottomSpacerHeight > 0 && (
-                    <TableRow
-                      aria-hidden="true"
-                      className="hover:bg-transparent"
-                    >
+                      {bottomSpacerHeight > 0 && (
+                        <TableRow
+                          aria-hidden="true"
+                          className="hover:bg-transparent"
+                        >
+                          <TableCell
+                            colSpan={visibleColumnCount}
+                            className="p-0"
+                            style={{ height: bottomSpacerHeight }}
+                          />
+                        </TableRow>
+                      )}
+                    </>
+                  ) : (
+                    <TableRow>
                       <TableCell
                         colSpan={visibleColumnCount}
-                        className="p-0"
-                        style={{ height: bottomSpacerHeight }}
-                      />
+                        className="h-24 text-center"
+                      >
+                        No results.
+                      </TableCell>
                     </TableRow>
                   )}
-                </>
-              ) : (
-                <TableRow>
-                  <TableCell
-                    colSpan={visibleColumnCount}
-                    className="h-24 text-center"
-                  >
-                    No results.
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </table>
-        </div>
+                </TableBody>
+              </table>
+            </div>
+          </>
+        ) : (
+          <div className="flex min-h-0 min-w-0 flex-1 p-4">
+            <IssueKanbanBoard
+              columns={boardColumns}
+              itemsByColumn={boardItems}
+              isLoading={isInitialLoading}
+              error={error}
+              emptyMessage="No issues"
+              getIssueId={(issue) => issue.id}
+              getIssueKey={(issue) => issue.display_key}
+              getIssueTitle={(issue) => issue.title}
+              getIssueHref={(issue) => `/${orgSlug}/issue/${issue.display_key}`}
+              onIssueMove={({ issue, fromColumnId, toColumnId }) =>
+                handleBoardMove({ issue, fromColumnId, toColumnId })
+              }
+            />
+          </div>
+        )}
       </div>
 
       <div className="relative flex items-center justify-center px-2 py-1 text-sm text-muted-foreground">
@@ -495,6 +614,17 @@ export function DataTable({ columns, filterType }: DataTableProps) {
           {total > 0 ? `${items.length} / ${total}` : "—"}
         </span>
         
+        {view === "board" && hasMore && !isFetchingMore && (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="absolute right-2"
+            onClick={() => void loadMore()}
+          >
+            Load more
+          </Button>
+        )}
         {isFetchingMore && (
           <span className="absolute right-2 flex items-center text-xs">
             <RotateCw className="w-3 h-3 mr-1.5 animate-spin" />
