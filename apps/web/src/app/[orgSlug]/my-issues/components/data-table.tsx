@@ -472,7 +472,9 @@ export function DataTable({ orgSlug, columns, filterType }: DataTableProps) {
         onViewChange={setView}
       />
 
-      <div className="relative flex max-h-full min-h-0 flex-1 flex-col rounded-md border overflow-hidden">
+      <div
+        className={`relative flex max-h-full min-h-0 flex-1 flex-col overflow-hidden ${view === "list" ? "rounded-md border" : ""}`}
+      >
         {view === "list" ? (
           <>
             <DataTableSelectionOverlay

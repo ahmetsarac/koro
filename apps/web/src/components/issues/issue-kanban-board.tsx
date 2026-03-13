@@ -405,17 +405,15 @@ function BoardColumn<TIssue extends KanbanIssue>({
         </div>
       </SortableContext>
 
-      {onAddIssue ? (
-        <div className="p-2">
-          <button
-            type="button"
-            onClick={() => onAddIssue(id)}
-            className="flex w-full items-center justify-center rounded-md border border-dashed border-muted-foreground/30 py-2 text-muted-foreground transition-colors hover:border-primary hover:bg-primary/5 hover:text-primary"
-          >
-            <Plus className="h-4 w-4" />
-          </button>
-        </div>
-      ) : null}
+      <div className="p-2">
+        <button
+          type="button"
+          onClick={() => onAddIssue?.(id)}
+          className="flex w-full items-center justify-center rounded-md border border-dashed border-muted-foreground/30 py-2 text-muted-foreground transition-colors hover:border-primary hover:bg-primary/5 hover:text-primary"
+        >
+          <Plus className="h-4 w-4" />
+        </button>
+      </div>
     </div>
   )
 }
