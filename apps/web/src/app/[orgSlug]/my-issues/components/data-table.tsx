@@ -66,6 +66,19 @@ function clearScrollState(filterType: IssueFilterType): void {
   myIssuesCache.delete(filterType)
 }
 
+const MY_ISSUES_VIEW_KEY = "koro_my_issues_view"
+
+function loadViewPreference(): "list" | "board" {
+  if (typeof window === "undefined") return "list"
+  const saved = window.localStorage.getItem(MY_ISSUES_VIEW_KEY)
+  return saved === "board" ? "board" : "list"
+}
+
+function saveViewPreference(view: "list" | "board"): void {
+  if (typeof window === "undefined") return
+  window.localStorage.setItem(MY_ISSUES_VIEW_KEY, view)
+}
+
 /** Kolon id → backend sort_by. Backend: created_at | updated_at | key_seq | title | status | priority */
 const COLUMN_TO_SORT_BY: Record<string, IssueSortBy> = {
   id: "key_seq",
@@ -148,7 +161,16 @@ export function DataTable({ orgSlug, columns, filterType }: DataTableProps) {
   const [scrollTop, setScrollTop] = React.useState(0)
   const [containerHeight, setContainerHeight] = React.useState(0)
   const [facets, setFacets] = React.useState<IssueFacets | null>(null)
-  const [view, setView] = React.useState<"list" | "board">("list")
+  const [view, setViewState] = React.useState<"list" | "board">("list")
+  const setView = React.useCallback((next: "list" | "board") => {
+    setViewState(next)
+    saveViewPreference(next)
+  }, [])
+
+  // Restore view preference from localStorage after mount (avoids SSR hydration mismatch)
+  React.useEffect(() => {
+    setViewState(loadViewPreference())
+  }, [])
 
   const scrollContainerRef = React.useRef<HTMLDivElement>(null)
   const hasRestoredFromCacheRef = React.useRef(false)
