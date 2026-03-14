@@ -9,6 +9,7 @@ import {
   PointerSensor,
   useSensor,
   useSensors,
+  useDroppable,
   closestCenter,
   type DragEndEvent,
   type DragStartEvent,
@@ -105,6 +106,7 @@ export function IssueKanbanBoard<TIssue extends KanbanIssue>({
   const [localColumns, setLocalColumns] = React.useState(normalizedColumns)
   const [activeIssue, setActiveIssue] = React.useState<TIssue | null>(null)
   const localColumnsRef = React.useRef(localColumns)
+  const dragSourceColumnIdRef = React.useRef<string | null>(null)
   const isInteractive = Boolean(onIssueMove)
 
   React.useEffect(() => {
@@ -143,12 +145,14 @@ export function IssueKanbanBoard<TIssue extends KanbanIssue>({
     if (!isInteractive) return
 
     const issueId = event.active.id as string
+    dragSourceColumnIdRef.current = null
 
     for (const columnId of Object.keys(localColumnsRef.current)) {
       const issue = localColumnsRef.current[columnId].find(
         (item) => getIssueId(item) === issueId
       )
       if (issue) {
+        dragSourceColumnIdRef.current = columnId
         setActiveIssue(issue)
         break
       }
@@ -205,13 +209,17 @@ export function IssueKanbanBoard<TIssue extends KanbanIssue>({
     if (!isInteractive) return
 
     const { active, over } = event
-    if (!over) return
+    if (!over) {
+      resetColumns()
+      return
+    }
 
     const activeId = active.id as string
     const overId = over.id as string
     const startColumns = localColumnsRef.current
 
-    const fromColumnId = findColumnForIssue(startColumns, activeId, getIssueId)
+    // Use source column stored at drag start; ref may already be updated by handleDragOver
+    const fromColumnId = dragSourceColumnIdRef.current ?? findColumnForIssue(startColumns, activeId, getIssueId)
     if (!fromColumnId) return
 
     let nextColumns = startColumns
@@ -237,23 +245,35 @@ export function IssueKanbanBoard<TIssue extends KanbanIssue>({
       }
     }
 
-    const toColumnId = findColumnForIssue(nextColumns, activeId, getIssueId)
+    // Cross-column move: ref was updated in handleDragOver; use latest for toColumnId
+    const currentColumns = localColumnsRef.current
+    let toColumnId = findColumnForIssue(currentColumns, activeId, getIssueId)
+    // Fallback: dropped on column droppable (overId is column id) but ref not yet updated
+    if (!toColumnId && columns.some((c) => c.id === overId)) {
+      toColumnId = overId
+    }
     if (!toColumnId) return
 
-    const nextItems = nextColumns[toColumnId]
+    const nextItems = currentColumns[toColumnId] ?? []
     const position = nextItems.findIndex((item) => getIssueId(item) === activeId)
-    const issue = nextItems[position]
-
+    let issue = position >= 0 ? nextItems[position] : undefined
+    // Fallback: get moved issue from source column when ref not yet updated
+    if (!issue) {
+      const fromItems = startColumns[fromColumnId] ?? []
+      issue = fromItems.find((item) => getIssueId(item) === activeId)
+    }
     if (!issue) return
+
+    const resolvedPosition = position >= 0 ? position : 0
 
     try {
       const result = await onIssueMove?.({
-        issue,
+        issue: { ...issue, status: toColumnId },
         issueId: activeId,
         fromColumnId,
         toColumnId,
-        position,
-        columns: nextColumns,
+        position: resolvedPosition,
+        columns: currentColumns,
       })
 
       if (result === false) {
@@ -368,6 +388,7 @@ function BoardColumn<TIssue extends KanbanIssue>({
   isInteractive,
 }: BoardColumnProps<TIssue>) {
   const issueIds = React.useMemo(() => issues.map(getIssueId), [issues, getIssueId])
+  const { setNodeRef: setDroppableRef, isOver } = useDroppable({ id })
 
   return (
     <div className="flex w-72 shrink-0 flex-col rounded-lg border bg-muted/30">
@@ -384,7 +405,10 @@ function BoardColumn<TIssue extends KanbanIssue>({
         items={issueIds}
         strategy={verticalListSortingStrategy}
       >
-        <div className="min-h-[100px] flex-1 space-y-2 overflow-y-auto p-2">
+        <div
+          ref={setDroppableRef}
+          className={`min-h-[100px] flex-1 space-y-2 overflow-y-auto p-2 ${isOver ? "rounded-md bg-muted/50" : ""}`}
+        >
           {issues.map((issue) => (
             <SortableBoardCard
               key={getIssueId(issue)}

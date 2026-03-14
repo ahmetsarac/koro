@@ -107,12 +107,16 @@ function buildFetchParams(
   return params
 }
 
-async function updateIssueStatus(issueId: string, status: string): Promise<boolean> {
-  const response = await fetch(`/api/issues/${issueId}/status`, {
+async function updateIssueBoardPosition(
+  issueId: string,
+  status: string,
+  position: number
+): Promise<boolean> {
+  const response = await fetch(`/api/issues/${issueId}/board-position`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     credentials: "same-origin",
-    body: JSON.stringify({ status }),
+    body: JSON.stringify({ status, position }),
   })
 
   return response.ok
@@ -422,15 +426,33 @@ export function DataTable({ orgSlug, columns, filterType }: DataTableProps) {
     </colgroup>
   )
 
+  const refetchIssues = React.useCallback(async () => {
+    try {
+      const params = buildFetchParams(sorting, columnFilters, null, filterType)
+      const res = await fetchMyIssues(params)
+      setItems(res.items)
+      setTotal(res.total)
+      setNextCursor(res.next_cursor ?? null)
+      setHasMore(res.has_more)
+      setFacets(res.facets)
+    } catch {
+      // keep current state on refetch error
+    }
+  }, [sorting, columnFilters, filterType])
+
   const handleBoardMove = React.useCallback(
     async ({
       issue,
+      issueId,
       fromColumnId,
       toColumnId,
+      position,
     }: {
       issue: Issue
+      issueId: string
       fromColumnId: string
       toColumnId: string
+      position: number
     }) => {
       if (fromColumnId === toColumnId) {
         return true
@@ -440,17 +462,21 @@ export function DataTable({ orgSlug, columns, filterType }: DataTableProps) {
 
       setItems((prev) =>
         prev.map((item) =>
-          item.id === issue.id ? { ...item, status: toColumnId } : item
+          item.id === issueId ? { ...item, status: toColumnId } : item
         )
       )
 
       try {
-        const success = await updateIssueStatus(issue.id, toColumnId)
+        const success = await updateIssueBoardPosition(
+          issueId,
+          toColumnId,
+          position
+        )
 
         if (!success) {
           setItems((prev) =>
             prev.map((item) =>
-              item.id === issue.id ? { ...item, status: previousStatus } : item
+              item.id === issueId ? { ...item, status: previousStatus } : item
             )
           )
           return false
@@ -461,7 +487,7 @@ export function DataTable({ orgSlug, columns, filterType }: DataTableProps) {
       } catch {
         setItems((prev) =>
           prev.map((item) =>
-            item.id === issue.id ? { ...item, status: previousStatus } : item
+            item.id === issueId ? { ...item, status: previousStatus } : item
           )
         )
         return false
@@ -610,9 +636,10 @@ export function DataTable({ orgSlug, columns, filterType }: DataTableProps) {
               getIssueKey={(issue) => issue.display_key}
               getIssueTitle={(issue) => issue.title}
               getIssueHref={(issue) => `/${orgSlug}/issue/${issue.display_key}`}
-              onIssueMove={({ issue, fromColumnId, toColumnId }) =>
-                handleBoardMove({ issue, fromColumnId, toColumnId })
+              onIssueMove={({ issue, issueId, fromColumnId, toColumnId, position }) =>
+                handleBoardMove({ issue, issueId, fromColumnId, toColumnId, position })
               }
+              onReload={refetchIssues}
               onAddIssue={(columnId) => newIssueModal?.openNewIssueModal(columnId)}
             />
           </div>
