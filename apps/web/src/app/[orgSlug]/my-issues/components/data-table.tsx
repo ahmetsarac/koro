@@ -32,7 +32,9 @@ import {
 
 import { type IssueFacets, type Issue } from "../data/schema"
 import { statuses } from "../data/data"
+import { useMyIssuesInitialView } from "./my-issues-view-context"
 import { DataTableSelectionOverlay } from "./data-table-selection-overlay"
+import { MY_ISSUES_VIEW_COOKIE } from "../constants"
 import { RotateCw } from "lucide-react"
 import {
   myIssuesCache,
@@ -77,6 +79,7 @@ function loadViewPreference(): "list" | "board" {
 function saveViewPreference(view: "list" | "board"): void {
   if (typeof window === "undefined") return
   window.localStorage.setItem(MY_ISSUES_VIEW_KEY, view)
+  document.cookie = `${MY_ISSUES_VIEW_COOKIE}=${view}; path=/; max-age=31536000; SameSite=Lax`
 }
 
 /** Kolon id → backend sort_by. Backend: created_at | updated_at | key_seq | title | status | priority */
@@ -143,6 +146,7 @@ interface DataTableProps {
 
 export function DataTable({ orgSlug, columns, filterType }: DataTableProps) {
   const newIssueModal = useNewIssueModal()
+  const initialView = useMyIssuesInitialView()
   const [items, setItems] = React.useState<Issue[]>([])
   const [nextCursor, setNextCursor] = React.useState<string | null>(null)
   const [total, setTotal] = React.useState(0)
@@ -161,15 +165,10 @@ export function DataTable({ orgSlug, columns, filterType }: DataTableProps) {
   const [scrollTop, setScrollTop] = React.useState(0)
   const [containerHeight, setContainerHeight] = React.useState(0)
   const [facets, setFacets] = React.useState<IssueFacets | null>(null)
-  const [view, setViewState] = React.useState<"list" | "board">("list")
+  const [view, setViewState] = React.useState<"list" | "board">(initialView)
   const setView = React.useCallback((next: "list" | "board") => {
     setViewState(next)
     saveViewPreference(next)
-  }, [])
-
-  // Restore view preference from localStorage after mount (avoids SSR hydration mismatch)
-  React.useEffect(() => {
-    setViewState(loadViewPreference())
   }, [])
 
   const scrollContainerRef = React.useRef<HTMLDivElement>(null)
