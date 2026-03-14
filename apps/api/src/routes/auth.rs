@@ -10,6 +10,14 @@ pub struct LoginRequest {
     pub password: String,
 }
 
+#[derive(Deserialize)]
+pub struct SignupRequest {
+    pub email: String,
+    pub name: String,
+    pub password: String,
+}
+
+
 #[derive(Serialize)]
 pub struct AuthTokensResponse {
     pub access_token: String,
@@ -81,6 +89,65 @@ pub async fn login(
     };
 
     (StatusCode::OK, Json(AuthTokensResponse::from(tokens))).into_response()
+}
+
+/// POST /signup — public registration. Creates user with platform_role 'user'.
+pub async fn signup(
+    State(state): State<AppState>,
+    Json(req): Json<SignupRequest>,
+) -> impl IntoResponse {
+    if req.password.len() < 8 {
+        return (StatusCode::BAD_REQUEST, "password must be at least 8 chars").into_response();
+    }
+    let email = req.email.trim().to_lowercase();
+    let name = req.name.trim();
+    if name.is_empty() {
+        return (StatusCode::BAD_REQUEST, "name is required").into_response();
+    }
+
+    let password_hash = match auth::hash_password(&req.password) {
+        Ok(h) => h,
+        Err(_) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+    };
+
+    let rec = match sqlx::query!(
+        r#"
+        INSERT INTO users (email, name, password_hash, platform_role)
+        VALUES ($1, $2, $3, 'user')
+        RETURNING id
+        "#,
+        email,
+        name,
+        password_hash
+    )
+    .fetch_one(&state.db)
+    .await
+    {
+        Ok(r) => r,
+        Err(e) => {
+            if let Some(db_err) = e.as_database_error() {
+                if db_err.is_unique_violation() {
+                    return (StatusCode::CONFLICT, "email already registered").into_response();
+                }
+            }
+            eprintln!("signup insert user failed: {e:?}");
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
+    };
+
+    let secret = match std::env::var("JWT_SECRET") {
+        Ok(s) => s,
+        Err(_) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+    };
+    let tokens = match jwt::issue_token_pair(rec.id, &secret) {
+        Ok(t) => t,
+        Err(e) => {
+            eprintln!("signup jwt error: {e:?}");
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
+    };
+
+    (StatusCode::CREATED, Json(AuthTokensResponse::from(tokens))).into_response()
 }
 
 pub async fn refresh(

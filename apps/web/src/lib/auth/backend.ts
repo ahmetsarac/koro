@@ -62,6 +62,22 @@ export async function loginWithApi(email: string, password: string) {
   );
 }
 
+export async function signupWithApi(
+  email: string,
+  name: string,
+  password: string,
+) {
+  return requestAuthTokens(
+    "/signup",
+    {
+      email,
+      name,
+      password,
+    },
+    "Signup failed.",
+  );
+}
+
 export async function refreshWithApi(refreshToken: string) {
   return requestAuthTokens(
     "/refresh",

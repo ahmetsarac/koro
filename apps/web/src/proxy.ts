@@ -50,7 +50,7 @@ export async function proxy(request: NextRequest) {
     ? await verifyJwt(accessToken, secret, "access")
     : null;
 
-  if (pathname === "/login") {
+  if (pathname === "/login" || pathname === "/signup") {
     if (accessClaims) {
       return NextResponse.redirect(new URL("/", request.url));
     }
@@ -111,5 +111,5 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/", "/login", "/((?!api|_next|favicon.ico).*)"],
+  matcher: ["/", "/login", "/signup", "/((?!api|_next|favicon.ico).*)"],
 };

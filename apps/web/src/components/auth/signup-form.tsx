@@ -19,13 +19,13 @@ function getErrorMessage(error: unknown) {
   if (error instanceof Error) {
     return error.message
   }
-
-  return "Login failed"
+  return "Kayıt başarısız"
 }
 
-export function LoginForm({ nextPath }: { nextPath: string }) {
+export function SignupForm() {
   const router = useRouter()
   const [email, setEmail] = useState("")
+  const [name, setName] = useState("")
   const [password, setPassword] = useState("")
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -36,29 +36,30 @@ export function LoginForm({ nextPath }: { nextPath: string }) {
     setLoading(true)
 
     try {
-      const response = await fetch("/api/auth/login", {
+      const response = await fetch("/api/auth/signup", {
         method: "POST",
         headers: {
           "content-type": "application/json",
         },
         body: JSON.stringify({
-          email,
+          email: email.trim(),
+          name: name.trim(),
           password,
         }),
       })
 
-      if (!response.ok) {
-        const data = (await response.json().catch(() => null)) as
-          | { message?: string }
-          | null
+      const data = (await response.json().catch(() => null)) as
+        | { message?: string }
+        | null
 
-        throw new Error(data?.message ?? "Login failed")
+      if (!response.ok) {
+        throw new Error(data?.message ?? "Kayıt başarısız")
       }
 
-      router.replace(nextPath)
+      router.replace("/onboarding")
       router.refresh()
-    } catch (error) {
-      setError(getErrorMessage(error))
+    } catch (err) {
+      setError(getErrorMessage(err))
     } finally {
       setLoading(false)
     }
@@ -68,33 +69,47 @@ export function LoginForm({ nextPath }: { nextPath: string }) {
     <div className="flex min-h-screen items-center justify-center bg-muted/30 p-4">
       <Card className="w-full max-w-sm border bg-card/95 shadow-sm backdrop-blur">
         <CardHeader>
-          <CardTitle className="text-2xl">Koro'ya giriş</CardTitle>
+          <CardTitle className="text-2xl">Hesap oluştur</CardTitle>
           <CardDescription>
-            Issue tracker hesabınla oturum aç.
+            Koro issue tracker kullanmaya başlamak için kayıt ol.
           </CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={onSubmit} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
+              <Label htmlFor="name">Ad</Label>
               <Input
-                id="email"
-                value={email}
-                onChange={(event) => setEmail(event.target.value)}
-                autoComplete="email"
-                placeholder="email@example.com"
+                id="name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                autoComplete="name"
+                placeholder="Adın Soyadın"
+                required
               />
             </div>
-
             <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
+              <Label htmlFor="email">E-posta</Label>
+              <Input
+                id="email"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                autoComplete="email"
+                placeholder="email@example.com"
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="password">Şifre</Label>
               <Input
                 id="password"
                 value={password}
-                onChange={(event) => setPassword(event.target.value)}
+                onChange={(e) => setPassword(e.target.value)}
                 type="password"
-                autoComplete="current-password"
-                placeholder="••••••••"
+                autoComplete="new-password"
+                placeholder="En az 8 karakter"
+                minLength={8}
+                required
               />
             </div>
 
@@ -103,13 +118,13 @@ export function LoginForm({ nextPath }: { nextPath: string }) {
             )}
 
             <Button className="w-full" disabled={loading} type="submit">
-              {loading ? "Giriş yapılıyor..." : "Giriş"}
+              {loading ? "Kaydediliyor..." : "Kayıt ol"}
             </Button>
 
             <p className="text-center text-sm text-muted-foreground">
-              Hesabın yok mu?{" "}
-              <Link href="/signup" className="underline hover:text-foreground">
-                Kayıt ol
+              Zaten hesabın var mı?{" "}
+              <Link href="/login" className="underline hover:text-foreground">
+                Giriş yap
               </Link>
             </p>
           </form>

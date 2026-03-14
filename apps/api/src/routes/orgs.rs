@@ -21,27 +21,6 @@ pub async fn create_org(
     AuthUser(user_id): AuthUser,
     Json(req): Json<CreateOrgRequest>,
 ) -> impl IntoResponse {
-    // POLICY: şu an güvenli başlangıç -> sadece platform_admin
-    // Self-serve'e geçince burayı gevşeteceğiz (tek yerden).
-    let platform_role = match sqlx::query_scalar::<_, String>(
-        "SELECT platform_role FROM users WHERE id = $1 AND is_active = true",
-    )
-    .bind(user_id)
-    .fetch_optional(&state.db)
-    .await
-    {
-        Ok(Some(r)) => r,
-        Ok(None) => return StatusCode::UNAUTHORIZED.into_response(),
-        Err(e) => {
-            eprintln!("create_org role check error {e:?}");
-            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
-        }
-    };
-
-    if platform_role != "platform_admin" {
-        return StatusCode::FORBIDDEN.into_response();
-    }
-
     let mut tx = match state.db.begin().await {
         Ok(tx) => tx,
         Err(_) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),

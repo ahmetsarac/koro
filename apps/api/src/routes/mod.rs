@@ -40,6 +40,7 @@ pub fn router(state: AppState) -> Router {
         .route("/invites/{token}", get(invites::get_invite))
         .route("/invites/{token}/accept", post(invites::accept_invite))
         .route("/login", post(auth::login))
+        .route("/signup", post(auth::signup))
         .route("/refresh", post(auth::refresh))
         .route("/orgs/{orgId}/projects", post(projects::create_project))
         .route("/projects/{projectId}/issues", post(issues::create_issue))

@@ -42,7 +42,7 @@ export default async function Home() {
 
   if (defaultOrg) {
     redirect(`/${defaultOrg}/my-issues`)
-  } else {
-    redirect("/login")
   }
+  // No org: either unauthenticated (onboarding will redirect to login) or new user (show onboarding)
+  redirect("/onboarding")
 }
