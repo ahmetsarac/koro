@@ -38,6 +38,7 @@ import { MY_ISSUES_VIEW_COOKIE } from "../constants"
 import { RotateCw } from "lucide-react"
 import {
   myIssuesCache,
+  MY_ISSUES_VIEW_STORAGE_KEY,
   type MyIssuesScrollState,
   updateIssueInCaches,
 } from "@/lib/cache/issues-cache"
@@ -68,17 +69,15 @@ function clearScrollState(filterType: IssueFilterType): void {
   myIssuesCache.delete(filterType)
 }
 
-const MY_ISSUES_VIEW_KEY = "koro_my_issues_view"
-
 function loadViewPreference(): "list" | "board" {
   if (typeof window === "undefined") return "list"
-  const saved = window.localStorage.getItem(MY_ISSUES_VIEW_KEY)
+  const saved = window.localStorage.getItem(MY_ISSUES_VIEW_STORAGE_KEY)
   return saved === "board" ? "board" : "list"
 }
 
 function saveViewPreference(view: "list" | "board"): void {
   if (typeof window === "undefined") return
-  window.localStorage.setItem(MY_ISSUES_VIEW_KEY, view)
+  window.localStorage.setItem(MY_ISSUES_VIEW_STORAGE_KEY, view)
   document.cookie = `${MY_ISSUES_VIEW_COOKIE}=${view}; path=/; max-age=31536000; SameSite=Lax`
 }
 

@@ -93,10 +93,17 @@ const priorityConfig: Record<
 
 const priorityList = ["critical", "high", "medium", "low"] as const
 
-async function fetchIssue(orgSlug: string, issueKey: string): Promise<Issue> {
-  const response = await fetch(`/api/orgs/${orgSlug}/issues/${issueKey}`, {
+async function fetchIssue(
+  orgSlug: string,
+  issueKey: string,
+  opts?: { cacheBust?: boolean }
+): Promise<Issue> {
+  const url = `/api/orgs/${orgSlug}/issues/${issueKey}`
+  const finalUrl = opts?.cacheBust ? `${url}?_t=${Date.now()}` : url
+  const response = await fetch(finalUrl, {
     cache: "no-store",
     credentials: "same-origin",
+    ...(opts?.cacheBust && { headers: { Pragma: "no-cache", "Cache-Control": "no-cache" } }),
   })
 
   if (!response.ok) {
@@ -391,22 +398,33 @@ export default function IssueDetailPage({
     if (!issue || isUpdatingAssignee) return
     if (userId === issue.assignee_id) return
 
+    const assignee_id = userId
+    const assignee_name =
+      userId === null
+        ? null
+        : projectMembers.find((m) => m.user_id === userId)?.name ?? null
+
+    setIssue((prev) =>
+      prev ? { ...prev, assignee_id, assignee_name } : null
+    )
+    updateIssueInCaches(issue.display_key, { assignee_id, assignee_name })
+
     setIsUpdatingAssignee(true)
     try {
-      let success: boolean
       if (userId === null) {
-        success = await unassignIssue(orgSlug, issueKey)
-        if (success) {
-          setIssue({ ...issue, assignee_id: null, assignee_name: null })
-          updateIssueInCaches(issue.display_key, { assignee_id: null, assignee_name: null })
-        }
+        await unassignIssue(orgSlug, issueKey)
       } else {
-        success = await assignIssue(orgSlug, issueKey, userId)
-        if (success) {
-          const member = projectMembers.find((m) => m.user_id === userId)
-          setIssue({ ...issue, assignee_id: userId, assignee_name: member?.name || null })
-          updateIssueInCaches(issue.display_key, { assignee_id: userId, assignee_name: member?.name || null })
-        }
+        await assignIssue(orgSlug, issueKey, userId)
+      }
+      try {
+        const updated = await fetchIssue(orgSlug, issueKey, { cacheBust: true })
+        setIssue(() => updated)
+        updateIssueInCaches(updated.display_key, {
+          assignee_id: updated.assignee_id,
+          assignee_name: updated.assignee_name,
+        })
+      } catch {
+        // Refetch failed; UI already shows optimistic update
       }
     } finally {
       setIsUpdatingAssignee(false)
@@ -590,7 +608,10 @@ export default function IssueDetailPage({
             </DropdownMenuContent>
           </DropdownMenu>
 
-          <DropdownMenu onOpenChange={(open) => open && loadProjectMembers()}>
+          <DropdownMenu
+            key={`assignee-${issue.assignee_id ?? "none"}`}
+            onOpenChange={(open) => open && loadProjectMembers()}
+          >
             <DropdownMenuTrigger asChild disabled={isUpdatingAssignee}>
               <button className="focus:outline-none">
                 <Badge variant="outline" className="gap-1.5 cursor-pointer hover:opacity-80 transition-opacity">

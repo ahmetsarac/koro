@@ -35,6 +35,21 @@ export function clearAllIssuesCaches(): void {
   projectIssuesCache.clear()
 }
 
+/** My Issues view preference key in localStorage (list vs board). */
+export const MY_ISSUES_VIEW_STORAGE_KEY = "koro_my_issues_view"
+
+/**
+ * Call on logout (or user change). Clears in-memory caches and my-issues view
+ * preference so the next user does not see the previous user's data.
+ */
+export function clearUserIssuesDataOnLogout(): void {
+  myIssuesCache.clear()
+  projectIssuesCache.clear()
+  if (typeof window !== "undefined") {
+    window.localStorage.removeItem(MY_ISSUES_VIEW_STORAGE_KEY)
+  }
+}
+
 // Clear specific project issues cache
 export function clearProjectIssuesCache(orgSlug: string, projectKey: string): void {
   projectIssuesCache.delete(`${orgSlug}-${projectKey}`)

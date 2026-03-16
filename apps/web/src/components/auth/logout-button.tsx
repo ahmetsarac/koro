@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { clearUserIssuesDataOnLogout } from "@/lib/cache/issues-cache";
 
 export function LogoutButton() {
   const router = useRouter();
@@ -13,6 +14,7 @@ export function LogoutButton() {
     setLoading(true);
 
     try {
+      clearUserIssuesDataOnLogout();
       await fetch("/api/auth/logout", {
         method: "POST",
       });

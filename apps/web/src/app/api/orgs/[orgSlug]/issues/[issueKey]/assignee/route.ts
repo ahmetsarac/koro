@@ -29,17 +29,29 @@ export async function PATCH(
       body: JSON.stringify(reqBody),
     })
 
-    const body = await response.text()
+    // 204 No Content has no body; reading it can cause issues in some runtimes
+    const body =
+      response.status === 204 ? "" : await response.text()
 
+    if (response.status >= 400) {
+      console.error(
+        "[assignee PATCH] backend returned",
+        response.status,
+        body || "(no body)"
+      )
+    }
+
+    // NextResponse with status 204 can throw "Invalid response status" in some runtimes; treat 204 as 200
+    const status = response.status === 204 ? 200 : response.status
     return new NextResponse(body, {
-      status: response.status,
+      status,
       headers: {
         "content-type":
           response.headers.get("content-type") ?? "application/json",
       },
     })
   } catch (error) {
-    console.error("Failed to assign issue", error)
+    console.error("Failed to assign issue (proxy error)", error)
 
     return NextResponse.json(
       { message: "Failed to assign issue" },
@@ -69,17 +81,29 @@ export async function DELETE(
       headers,
     })
 
-    const body = await response.text()
+    // 204 No Content has no body; reading it can cause issues in some runtimes
+    const body =
+      response.status === 204 ? "" : await response.text()
 
+    if (response.status >= 400) {
+      console.error(
+        "[assignee DELETE] backend returned",
+        response.status,
+        body || "(no body)"
+      )
+    }
+
+    // NextResponse with status 204 can throw "Invalid response status" in some runtimes; treat 204 as 200
+    const status = response.status === 204 ? 200 : response.status
     return new NextResponse(body, {
-      status: response.status,
+      status,
       headers: {
         "content-type":
           response.headers.get("content-type") ?? "application/json",
       },
     })
   } catch (error) {
-    console.error("Failed to unassign issue", error)
+    console.error("Failed to unassign issue (proxy error)", error)
 
     return NextResponse.json(
       { message: "Failed to unassign issue" },

@@ -24,6 +24,8 @@ import { ChevronsUpDownIcon, SparklesIcon, BadgeCheckIcon, CreditCardIcon, BellI
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 
+import { clearUserIssuesDataOnLogout } from "@/lib/cache/issues-cache"
+
 export function NavUser({
   user,
 }: {
@@ -41,6 +43,7 @@ export function NavUser({
     setLoading(true);
 
     try {
+      clearUserIssuesDataOnLogout();
       await fetch("/api/auth/logout", {
         method: "POST",
       });
