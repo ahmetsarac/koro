@@ -1,7 +1,7 @@
 use axum::{Json, extract::State, http::StatusCode, response::IntoResponse};
 use serde::Serialize;
 
-use crate::{db, state::AppState};
+use crate::{services::health as health_service, state::AppState};
 
 #[derive(Serialize)]
 pub struct HealthResponse {
@@ -9,15 +9,16 @@ pub struct HealthResponse {
 }
 
 pub async fn health(State(state): State<AppState>) -> impl IntoResponse {
-    match db::ping(&state.db).await {
-        Ok(_) => (StatusCode::OK, Json(HealthResponse { status: "ok" })).into_response(),
-        Err(err) => {
-            eprintln!("healthcheck failed: {err:?}");
-            (
-                StatusCode::SERVICE_UNAVAILABLE,
-                Json(HealthResponse { status: "db_down" }),
-            )
-                .into_response()
+    match health_service::check(&state.db).await {
+        health_service::HealthStatus::Ok => {
+            (StatusCode::OK, Json(HealthResponse { status: "ok" })).into_response()
         }
+        health_service::HealthStatus::DbDown => (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(HealthResponse {
+                status: "db_down",
+            }),
+        )
+            .into_response(),
     }
 }
