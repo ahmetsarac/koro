@@ -1,0 +1,1 @@
+//! Issue relation domain types.
