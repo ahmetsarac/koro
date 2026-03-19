@@ -1,15 +1,17 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use utoipa::{IntoParams, ToSchema};
 use uuid::Uuid;
 
-#[derive(Deserialize)]
+#[derive(Deserialize, IntoParams, ToSchema)]
+#[into_params(parameter_in = Query)]
 pub struct ListMyProjectsQuery {
     pub limit: Option<i32>,
     pub offset: Option<i32>,
     pub q: Option<String>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct ProjectItem {
     pub id: Uuid,
     pub project_key: String,
@@ -24,7 +26,7 @@ pub struct ProjectItem {
     pub created_at: DateTime<Utc>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct ListMyProjectsResponse {
     pub items: Vec<ProjectItem>,
     pub total: i64,
@@ -33,7 +35,7 @@ pub struct ListMyProjectsResponse {
     pub has_more: bool,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct GetProjectResponse {
     pub id: Uuid,
     pub project_key: String,
@@ -48,21 +50,21 @@ pub struct GetProjectResponse {
     pub created_at: DateTime<Utc>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, ToSchema)]
 pub struct CreateProjectRequest {
     pub project_key: String,
     pub name: String,
     pub description: Option<String>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct CreateProjectResponse {
     pub project_id: Uuid,
     pub project_key: String,
     pub name: String,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct ProjectMemberItem {
     pub user_id: Uuid,
     pub name: String,
@@ -70,7 +72,7 @@ pub struct ProjectMemberItem {
     pub project_role: String,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct ListProjectMembersResponse {
     pub items: Vec<ProjectMemberItem>,
 }

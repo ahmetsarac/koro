@@ -13,6 +13,24 @@ use crate::modules::{
     core::{state::AppState, AppError},
 };
 
+#[utoipa::path(
+    post,
+    path = "/orgs/{orgSlug}/issues/{issueKey}/comments",
+    tag = "comments",
+    security(("bearer_auth" = [])),
+    params(
+        ("orgSlug" = String, Path),
+        ("issueKey" = String, Path),
+    ),
+    request_body = CreateCommentRequest,
+    responses(
+        (status = 201, description = "Comment created", body = CreateCommentResponse),
+        (status = 400, description = "Bad request"),
+        (status = 403, description = "Forbidden"),
+        (status = 404, description = "Not found"),
+        (status = 500, description = "Server error"),
+    )
+)]
 pub async fn create_comment(
     Path((org_slug, issue_key)): Path<(String, String)>,
     State(state): State<AppState>,
@@ -30,6 +48,22 @@ pub async fn create_comment(
     Ok((StatusCode::CREATED, Json(res)))
 }
 
+#[utoipa::path(
+    get,
+    path = "/orgs/{orgSlug}/issues/{issueKey}/comments",
+    tag = "comments",
+    security(("bearer_auth" = [])),
+    params(
+        ("orgSlug" = String, Path),
+        ("issueKey" = String, Path),
+    ),
+    responses(
+        (status = 200, description = "Comments", body = ListCommentsResponse),
+        (status = 403, description = "Forbidden"),
+        (status = 404, description = "Not found"),
+        (status = 500, description = "Server error"),
+    )
+)]
 pub async fn list_comments(
     Path((org_slug, issue_key)): Path<(String, String)>,
     State(state): State<AppState>,

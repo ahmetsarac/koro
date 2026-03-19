@@ -1,6 +1,6 @@
 use axum::{Json, http::StatusCode, response::IntoResponse};
 use sqlx::PgPool;
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
 
 use crate::modules::{
     events::repository as events_repo,
@@ -11,8 +11,9 @@ use super::{
     models::{
         parse_issue_key, AssignIssueRequest, BoardResponse, CreateIssueRequest,
         CreateIssueResponse, IssueDetailResponse, IssueListItem, ListIssuesResponse,
-        ListMyIssuesQuery, ListMyIssuesResponse, ListProjectIssuesResponse, MyIssueItem,
-        MyIssuesCursor, UpdateIssueBoardPositionRequest, UpdateIssueRequest,
+        ListIssuesQuery, ListMyIssuesQuery, ListMyIssuesResponse, ListProjectIssuesResponse,
+        MyIssueItem, MyIssuesCursor, UpdateIssueBoardPositionRequest,
+        UpdateIssueBoardPositionResponse, UpdateIssueRequest,
         UpdateIssueResponse, UpdateIssueStatusRequest, UpdateIssueStatusResponse,
     },
     repository as issues_repo,
@@ -238,7 +239,7 @@ pub async fn list_issues(
     pool: &PgPool,
     project_id: uuid::Uuid,
     user_id: uuid::Uuid,
-    q: HashMap<String, String>,
+    q: ListIssuesQuery,
 ) -> impl IntoResponse + use<> {
     let is_member = match events_repo::is_project_member(pool, project_id, user_id).await {
         Ok(v) => v,
@@ -260,23 +261,15 @@ pub async fn list_issues(
         }
     };
 
-    let status_filter = q.get("status").cloned();
-    let q_filter = q.get("q").cloned();
-    let assignee_filter: Option<uuid::Uuid> = match q.get("assignee").map(|s| s.as_str()) {
+    let status_filter = q.status.clone();
+    let q_filter = q.q.clone();
+    let assignee_filter: Option<uuid::Uuid> = match q.assignee.as_deref() {
         Some("me") => Some(user_id),
         Some(raw) => raw.parse::<uuid::Uuid>().ok(),
         None => None,
     };
-    let limit: i64 = q
-        .get("limit")
-        .and_then(|v| v.parse::<i64>().ok())
-        .unwrap_or(50)
-        .clamp(1, 200);
-    let offset: i64 = q
-        .get("offset")
-        .and_then(|v| v.parse::<i64>().ok())
-        .unwrap_or(0)
-        .max(0);
+    let limit: i64 = q.limit.unwrap_or(50).clamp(1, 200);
+    let offset: i64 = q.offset.unwrap_or(0).max(0);
 
     let rows = match issues_repo::list_issue_summaries_for_project(
         pool,
@@ -314,7 +307,7 @@ pub async fn list_project_issues_by_key(
     org_slug: String,
     project_key: String,
     user_id: uuid::Uuid,
-    q: HashMap<String, String>,
+    q: ListIssuesQuery,
 ) -> impl IntoResponse + use<> {
     let project = match issues_repo::find_project_by_org_slug_and_key(pool, &org_slug, &project_key).await {
         Ok(Some(p)) => p,
@@ -338,23 +331,15 @@ pub async fn list_project_issues_by_key(
         return StatusCode::FORBIDDEN.into_response();
     }
 
-    let status_filter = q.get("status").cloned();
-    let q_filter = q.get("q").cloned();
-    let assignee_filter: Option<uuid::Uuid> = match q.get("assignee").map(|s| s.as_str()) {
+    let status_filter = q.status.clone();
+    let q_filter = q.q.clone();
+    let assignee_filter: Option<uuid::Uuid> = match q.assignee.as_deref() {
         Some("me") => Some(user_id),
         Some(raw) => raw.parse::<uuid::Uuid>().ok(),
         None => None,
     };
-    let limit: i64 = q
-        .get("limit")
-        .and_then(|v| v.parse::<i64>().ok())
-        .unwrap_or(50)
-        .clamp(1, 200);
-    let offset: i64 = q
-        .get("offset")
-        .and_then(|v| v.parse::<i64>().ok())
-        .unwrap_or(0)
-        .max(0);
+    let limit: i64 = q.limit.unwrap_or(50).clamp(1, 200);
+    let offset: i64 = q.offset.unwrap_or(0).max(0);
 
     let total: i64 = match issues_repo::count_issues_for_project_filtered(
         pool,
@@ -674,11 +659,11 @@ pub async fn update_issue_board_position(
 
     (
         StatusCode::OK,
-        Json(serde_json::json!({
-            "issue_id": issue_id,
-            "status": req.status,
-            "position": req.position
-        })),
+        Json(UpdateIssueBoardPositionResponse {
+            issue_id,
+            status: req.status,
+            position: req.position,
+        }),
     )
         .into_response()
 }

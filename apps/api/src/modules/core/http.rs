@@ -10,6 +10,9 @@ use axum::{
 use serde::Serialize;
 use tower_http::trace::{DefaultMakeSpan, DefaultOnResponse, TraceLayer};
 use tracing::Level;
+use utoipa::openapi::security::{HttpAuthScheme, HttpBuilder, SecurityScheme};
+use utoipa::{Modify, OpenApi, ToSchema};
+use utoipa_swagger_ui::SwaggerUi;
 
 use crate::modules::{
     auth::handlers as auth_handlers,
@@ -24,11 +27,37 @@ use crate::modules::{
     users::handlers as users_handlers,
 };
 
-#[derive(Serialize)]
-struct HealthResponse {
-    status: &'static str,
+#[derive(Serialize, ToSchema)]
+pub struct HealthResponse {
+    pub status: &'static str,
 }
 
+struct SecurityAddon;
+
+impl Modify for SecurityAddon {
+    fn modify(&self, openapi: &mut utoipa::openapi::OpenApi) {
+        let components = openapi.components.get_or_insert_default();
+        components.add_security_scheme(
+            "bearer_auth",
+            SecurityScheme::Http(
+                HttpBuilder::new()
+                    .scheme(HttpAuthScheme::Bearer)
+                    .bearer_format("JWT")
+                    .build(),
+            ),
+        );
+    }
+}
+
+#[utoipa::path(
+    get,
+    path = "/health",
+    tag = "system",
+    responses(
+        (status = 200, description = "Database OK", body = HealthResponse),
+        (status = 503, description = "Database unreachable", body = HealthResponse),
+    )
+)]
 pub async fn health(State(state): State<AppState>) -> impl IntoResponse {
     match db::ping(&state.db).await {
         Ok(()) => (StatusCode::OK, Json(HealthResponse { status: "ok" })).into_response(),
@@ -45,8 +74,134 @@ pub async fn health(State(state): State<AppState>) -> impl IntoResponse {
     }
 }
 
+#[derive(OpenApi)]
+#[openapi(
+    info(
+        title = "Koro API",
+        version = "0.1.0",
+        description = "REST API for Koro (issues, orgs, projects, comments, uploads, invites)."
+    ),
+    modifiers(&SecurityAddon),
+    paths(
+        health,
+        uploads::upload,
+        uploads::get_attachment,
+        users_handlers::get_me,
+        users_handlers::setup,
+        orgs_handlers::create_org,
+        projects_handlers::list_projects,
+        projects_handlers::get_project,
+        projects_handlers::create_project,
+        projects_handlers::list_project_members,
+        invites_handlers::create_invite,
+        invites_handlers::get_invite,
+        invites_handlers::accept_invite,
+        auth_handlers::login,
+        auth_handlers::signup,
+        auth_handlers::refresh,
+        issues_handlers::create_issue,
+        issues_handlers::list_my_issues,
+        issues_handlers::list_issues,
+        issues_handlers::list_project_issues_by_key,
+        issues_handlers::update_issue_status,
+        issues_handlers::update_issue,
+        issues_handlers::get_board,
+        issues_handlers::get_board_by_key,
+        issues_handlers::update_issue_board_position,
+        issues_handlers::get_issue,
+        issues_handlers::get_issue_by_key,
+        issues_handlers::assign_issue,
+        issues_handlers::assign_me,
+        issues_handlers::unassign_issue,
+        comments_handlers::create_comment,
+        comments_handlers::list_comments,
+        relations_handlers::create_relation,
+        relations_handlers::get_relations,
+        relations_handlers::delete_relation,
+        events_handlers::list_issue_events,
+    ),
+    components(schemas(
+        HealthResponse,
+        crate::modules::auth::models::LoginRequest,
+        crate::modules::auth::models::SignupRequest,
+        crate::modules::auth::models::RefreshRequest,
+        crate::modules::auth::models::AuthTokensResponse,
+        crate::modules::users::models::UserOrganization,
+        crate::modules::users::models::MeResponse,
+        crate::modules::users::models::SetupRequest,
+        crate::modules::users::models::SetupResponse,
+        crate::modules::orgs::models::CreateOrgRequest,
+        crate::modules::orgs::models::CreateOrgResult,
+        crate::modules::projects::models::ListMyProjectsQuery,
+        crate::modules::projects::models::ProjectItem,
+        crate::modules::projects::models::ListMyProjectsResponse,
+        crate::modules::projects::models::GetProjectResponse,
+        crate::modules::projects::models::CreateProjectRequest,
+        crate::modules::projects::models::CreateProjectResponse,
+        crate::modules::projects::models::ProjectMemberItem,
+        crate::modules::projects::models::ListProjectMembersResponse,
+        crate::modules::invites::models::CreateInviteRequest,
+        crate::modules::invites::models::CreateInviteResponse,
+        crate::modules::invites::models::GetInviteResponse,
+        crate::modules::invites::models::AcceptInviteRequest,
+        crate::modules::invites::models::AcceptInviteResponse,
+        crate::modules::issues::models::MyIssueSortBy,
+        crate::modules::issues::models::SortDirection,
+        crate::modules::issues::models::MyIssuesCursor,
+        crate::modules::issues::models::ListMyIssuesQuery,
+        crate::modules::issues::models::ListIssuesQuery,
+        crate::modules::issues::models::CreateIssueRequest,
+        crate::modules::issues::models::CreateIssueResponse,
+        crate::modules::issues::models::IssueListItem,
+        crate::modules::issues::models::ListIssuesResponse,
+        crate::modules::issues::models::ListProjectIssuesResponse,
+        crate::modules::issues::models::MyIssueItem,
+        crate::modules::issues::models::MyIssueFacets,
+        crate::modules::issues::models::ListMyIssuesResponse,
+        crate::modules::issues::models::UpdateIssueStatusRequest,
+        crate::modules::issues::models::UpdateIssueStatusResponse,
+        crate::modules::issues::models::UpdateIssueRequest,
+        crate::modules::issues::models::UpdateIssueResponse,
+        crate::modules::issues::models::BoardResponse,
+        crate::modules::issues::models::UpdateIssueBoardPositionRequest,
+        crate::modules::issues::models::UpdateIssueBoardPositionResponse,
+        crate::modules::issues::models::IssueDetailResponse,
+        crate::modules::issues::models::AssignIssueRequest,
+        crate::modules::comments::models::CreateCommentRequest,
+        crate::modules::comments::models::CreateCommentResponse,
+        crate::modules::comments::models::CommentItem,
+        crate::modules::comments::models::ListCommentsResponse,
+        crate::modules::events::models::EventActor,
+        crate::modules::events::models::EventItem,
+        crate::modules::events::models::ListEventsResponse,
+        crate::modules::relations::models::CreateRelationRequest,
+        crate::modules::relations::models::CreateRelationResponse,
+        crate::modules::relations::models::RelationItem,
+        crate::modules::relations::models::GetRelationsResponse,
+        uploads::UploadResponse,
+    )),
+    tags(
+        (name = "system", description = "Health"),
+        (name = "auth", description = "Authentication (JWT)"),
+        (name = "users", description = "Current user and bootstrap"),
+        (name = "uploads", description = "Attachments (multipart)"),
+        (name = "orgs", description = "Organizations"),
+        (name = "projects", description = "Projects"),
+        (name = "invites", description = "Org invites"),
+        (name = "issues", description = "Issues, board, assignment"),
+        (name = "comments", description = "Issue comments"),
+        (name = "relations", description = "Issue relations"),
+        (name = "events", description = "Issue activity / audit log"),
+    ),
+)]
+pub struct ApiDoc;
+
 pub fn router(state: AppState) -> Router {
     Router::new()
+        .merge(
+            SwaggerUi::new("/swagger-ui")
+                .url("/openapi.json", ApiDoc::openapi()),
+        )
         .route("/health", get(health))
         .route(
             "/uploads",

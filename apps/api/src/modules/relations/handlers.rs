@@ -13,6 +13,24 @@ use crate::modules::{
     },
 };
 
+#[utoipa::path(
+    post,
+    path = "/orgs/{orgSlug}/issues/{issueKey}/relations",
+    tag = "relations",
+    security(("bearer_auth" = [])),
+    params(
+        ("orgSlug" = String, Path, description = "Organization slug"),
+        ("issueKey" = String, Path, description = "Source issue key"),
+    ),
+    request_body = CreateRelationRequest,
+    responses(
+        (status = 201, description = "Relation created", body = CreateRelationResponse),
+        (status = 400, description = "Bad request"),
+        (status = 403, description = "Forbidden"),
+        (status = 404, description = "Not found"),
+        (status = 500, description = "Server error"),
+    )
+)]
 pub async fn create_relation(
     Path((org_slug, source_issue_key)): Path<(String, String)>,
     State(state): State<AppState>,
@@ -30,6 +48,22 @@ pub async fn create_relation(
     Ok((StatusCode::CREATED, Json(res)))
 }
 
+#[utoipa::path(
+    get,
+    path = "/orgs/{orgSlug}/issues/{issueKey}/relations",
+    tag = "relations",
+    security(("bearer_auth" = [])),
+    params(
+        ("orgSlug" = String, Path),
+        ("issueKey" = String, Path),
+    ),
+    responses(
+        (status = 200, description = "Relations for source issue", body = GetRelationsResponse),
+        (status = 403, description = "Forbidden"),
+        (status = 404, description = "Not found"),
+        (status = 500, description = "Server error"),
+    )
+)]
 pub async fn get_relations(
     Path((org_slug, source_issue_key)): Path<(String, String)>,
     State(state): State<AppState>,
@@ -40,6 +74,23 @@ pub async fn get_relations(
     Ok((StatusCode::OK, Json(res)))
 }
 
+#[utoipa::path(
+    delete,
+    path = "/orgs/{orgSlug}/issues/{issueKey}/relations/{relationId}",
+    tag = "relations",
+    security(("bearer_auth" = [])),
+    params(
+        ("orgSlug" = String, Path),
+        ("issueKey" = String, Path),
+        ("relationId" = uuid::Uuid, Path),
+    ),
+    responses(
+        (status = 204, description = "Deleted"),
+        (status = 403, description = "Forbidden"),
+        (status = 404, description = "Not found"),
+        (status = 500, description = "Server error"),
+    )
+)]
 pub async fn delete_relation(
     Path((org_slug, _issue_key, relation_id)): Path<(String, String, uuid::Uuid)>,
     State(state): State<AppState>,

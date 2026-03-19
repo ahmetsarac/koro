@@ -43,5 +43,7 @@ jsonwebtoken = { version = "10", features = ["rust_crypto"] }
 # S3-compatible object storage (MinIO)
 object_store = { version = "0.13", features = ["aws"] }
 bytes = "1"
+utoipa = { version = "5.4.0", features = ["axum_extras", "chrono", "uuid"] }
+utoipa-swagger-ui = { version = "9.0.2", features = ["axum"] }
 
 

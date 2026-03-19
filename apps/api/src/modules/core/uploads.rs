@@ -11,6 +11,7 @@ use object_store::aws::AmazonS3;
 use object_store::path::Path as ObjectStorePath;
 use object_store::ObjectStoreExt;
 use serde::Serialize;
+use utoipa::ToSchema;
 use uuid::Uuid;
 
 use crate::modules::{
@@ -27,7 +28,7 @@ const ALLOWED_IMAGE_TYPES: &[&str] = &[
     "image/webp",
 ];
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct UploadResponse {
     pub url: String,
 }
@@ -155,7 +156,20 @@ pub async fn fetch_attachment_bytes(
     Ok((bytes, content_type))
 }
 
-/// POST /uploads — multipart form with field "file"
+/// POST /uploads — multipart form with field `file` (image).
+#[utoipa::path(
+    post,
+    path = "/uploads",
+    tag = "uploads",
+    security(("bearer_auth" = [])),
+    responses(
+        (status = 200, description = "Relative URL for the stored object", body = UploadResponse),
+        (status = 400, description = "Invalid multipart or file"),
+        (status = 401, description = "Unauthorized"),
+        (status = 413, description = "Payload too large"),
+        (status = 503, description = "Upload storage not configured"),
+    )
+)]
 pub async fn upload(
     State(state): State<AppState>,
     AuthUser(_user_id): AuthUser,
@@ -169,7 +183,19 @@ pub async fn upload(
     Ok((StatusCode::OK, axum::Json(res)))
 }
 
-/// GET /uploads/attachments/:filename
+/// GET /uploads/attachments/:filename — returns image bytes.
+#[utoipa::path(
+    get,
+    path = "/uploads/attachments/{filename}",
+    tag = "uploads",
+    params(
+        ("filename" = String, Path, description = "Object basename (uuid.ext)"),
+    ),
+    responses(
+        (status = 200, description = "Binary body with correct Content-Type"),
+        (status = 404, description = "Not found"),
+    )
+)]
 pub async fn get_attachment(
     State(state): State<AppState>,
     AxumPath(filename): AxumPath<String>,

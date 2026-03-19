@@ -8,6 +8,17 @@ use crate::modules::{
     core::{state::AppState, AppError},
 };
 
+#[utoipa::path(
+    post,
+    path = "/login",
+    tag = "auth",
+    request_body = LoginRequest,
+    responses(
+        (status = 200, description = "JWT token pair", body = AuthTokensResponse),
+        (status = 401, description = "Invalid email or password"),
+        (status = 500, description = "Server error"),
+    )
+)]
 pub async fn login(
     State(state): State<AppState>,
     Json(req): Json<LoginRequest>,
@@ -25,6 +36,18 @@ pub async fn login(
     Ok((StatusCode::OK, Json(tokens)))
 }
 
+#[utoipa::path(
+    post,
+    path = "/signup",
+    tag = "auth",
+    request_body = SignupRequest,
+    responses(
+        (status = 201, description = "JWT token pair", body = AuthTokensResponse),
+        (status = 400, description = "Validation error"),
+        (status = 409, description = "Email already registered"),
+        (status = 500, description = "Server error"),
+    )
+)]
 pub async fn signup(
     State(state): State<AppState>,
     Json(req): Json<SignupRequest>,
@@ -43,6 +66,17 @@ pub async fn signup(
     Ok((StatusCode::CREATED, Json(tokens)))
 }
 
+#[utoipa::path(
+    post,
+    path = "/refresh",
+    tag = "auth",
+    request_body = RefreshRequest,
+    responses(
+        (status = 200, description = "New JWT token pair", body = AuthTokensResponse),
+        (status = 401, description = "Invalid refresh token"),
+        (status = 500, description = "Server error"),
+    )
+)]
 pub async fn refresh(
     State(state): State<AppState>,
     Json(req): Json<RefreshRequest>,

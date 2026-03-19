@@ -1,7 +1,8 @@
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 use uuid::Uuid;
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct UserOrganization {
     pub id: Uuid,
     pub name: String,
@@ -9,7 +10,7 @@ pub struct UserOrganization {
     pub role: String,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct MeResponse {
     pub id: Uuid,
     pub email: String,
@@ -17,14 +18,14 @@ pub struct MeResponse {
     pub organizations: Vec<UserOrganization>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, ToSchema)]
 pub struct SetupRequest {
     pub email: String,
     pub name: String,
     pub password: String,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct SetupResponse {
     pub user_id: Uuid,
     pub email: String,

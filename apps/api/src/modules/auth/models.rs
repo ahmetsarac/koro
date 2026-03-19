@@ -1,8 +1,9 @@
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 
 use crate::modules::auth::jwt;
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct AuthTokensResponse {
     pub access_token: String,
     pub refresh_token: String,
@@ -17,20 +18,20 @@ impl From<jwt::TokenPair> for AuthTokensResponse {
     }
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, ToSchema)]
 pub struct LoginRequest {
     pub email: String,
     pub password: String,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, ToSchema)]
 pub struct SignupRequest {
     pub email: String,
     pub name: String,
     pub password: String,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, ToSchema)]
 pub struct RefreshRequest {
     pub refresh_token: String,
 }

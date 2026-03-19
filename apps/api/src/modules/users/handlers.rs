@@ -9,6 +9,17 @@ use crate::modules::{
     },
 };
 
+#[utoipa::path(
+    get,
+    path = "/me",
+    tag = "users",
+    security(("bearer_auth" = [])),
+    responses(
+        (status = 200, description = "Current user + orgs", body = MeResponse),
+        (status = 401, description = "Unauthorized"),
+        (status = 500, description = "Server error"),
+    )
+)]
 pub async fn get_me(
     State(state): State<AppState>,
     AuthUser(user_id): AuthUser,
@@ -17,6 +28,18 @@ pub async fn get_me(
     Ok((StatusCode::OK, Json(me)))
 }
 
+#[utoipa::path(
+    post,
+    path = "/setup",
+    tag = "users",
+    request_body = SetupRequest,
+    responses(
+        (status = 201, description = "Platform admin created", body = SetupResponse),
+        (status = 400, description = "Validation error"),
+        (status = 403, description = "Setup not allowed"),
+        (status = 500, description = "Server error"),
+    )
+)]
 pub async fn setup(
     State(state): State<AppState>,
     Json(req): Json<SetupRequest>,

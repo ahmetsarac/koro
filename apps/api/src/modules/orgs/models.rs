@@ -1,7 +1,8 @@
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 use uuid::Uuid;
 
-#[derive(Deserialize)]
+#[derive(Deserialize, ToSchema)]
 pub struct CreateOrgRequest {
     pub name: String,
     pub slug: String,
@@ -12,7 +13,7 @@ pub struct CreateOrgInput<'a> {
     pub slug: &'a str,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct CreateOrgResult {
     pub org_id: Uuid,
     pub name: String,

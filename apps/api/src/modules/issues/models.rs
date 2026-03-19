@@ -1,11 +1,12 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
+use utoipa::{IntoParams, ToSchema};
 use uuid::Uuid;
 
 // --- "My issues" list query / cursor (API + pagination) --------------------
 
-#[derive(Debug, Clone, Copy, Deserialize, Serialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Deserialize, Serialize, PartialEq, Eq, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum MyIssueSortBy {
     CreatedAt,
@@ -35,7 +36,7 @@ impl MyIssueSortBy {
     }
 }
 
-#[derive(Debug, Clone, Copy, Deserialize, Serialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Deserialize, Serialize, PartialEq, Eq, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum SortDirection {
     Asc,
@@ -64,7 +65,7 @@ impl SortDirection {
     }
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize, ToSchema)]
 pub struct MyIssuesCursor {
     pub id: uuid::Uuid,
     pub sort_text: Option<String>,
@@ -72,7 +73,20 @@ pub struct MyIssuesCursor {
     pub sort_timestamp: Option<DateTime<Utc>>,
 }
 
-#[derive(Deserialize)]
+/// Pagination and filters for project-scoped issue lists (`/projects/.../issues`).
+#[derive(Deserialize, IntoParams, ToSchema)]
+#[into_params(parameter_in = Query)]
+pub struct ListIssuesQuery {
+    pub status: Option<String>,
+    pub q: Option<String>,
+    /// Pass a user UUID, or the string `me` for the current user.
+    pub assignee: Option<String>,
+    pub limit: Option<i64>,
+    pub offset: Option<i64>,
+}
+
+#[derive(Deserialize, IntoParams, ToSchema)]
+#[into_params(parameter_in = Query)]
 pub struct ListMyIssuesQuery {
     pub limit: Option<i64>,
     pub offset: Option<i64>,
@@ -92,7 +106,7 @@ pub fn parse_issue_key(key: &str) -> Option<(&str, i32)> {
     Some((project_key, seq))
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, ToSchema)]
 pub struct CreateIssueRequest {
     pub title: String,
     pub description: Option<String>,
@@ -101,14 +115,14 @@ pub struct CreateIssueRequest {
     pub priority: Option<String>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct CreateIssueResponse {
     pub issue_id: Uuid,
     pub display_key: String,
     pub title: String,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct IssueListItem {
     pub issue_id: Uuid,
     pub display_key: String,
@@ -116,12 +130,12 @@ pub struct IssueListItem {
     pub status: String,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct ListIssuesResponse {
     pub items: Vec<IssueListItem>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct ListProjectIssuesResponse {
     pub items: Vec<IssueListItem>,
     pub total: i64,
@@ -130,7 +144,7 @@ pub struct ListProjectIssuesResponse {
     pub has_more: bool,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct MyIssueItem {
     pub id: Uuid,
     pub display_key: String,
@@ -139,13 +153,13 @@ pub struct MyIssueItem {
     pub priority: String,
 }
 
-#[derive(Debug, Default, Serialize)]
+#[derive(Debug, Default, Serialize, ToSchema)]
 pub struct MyIssueFacets {
     pub status: HashMap<String, i64>,
     pub priority: HashMap<String, i64>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct ListMyIssuesResponse {
     pub items: Vec<MyIssueItem>,
     pub total: i64,
@@ -158,25 +172,25 @@ pub struct ListMyIssuesResponse {
     pub facets: MyIssueFacets,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, ToSchema)]
 pub struct UpdateIssueStatusRequest {
     pub status: String,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct UpdateIssueStatusResponse {
     pub issue_id: Uuid,
     pub status: String,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, ToSchema)]
 pub struct UpdateIssueRequest {
     pub title: Option<String>,
     pub description: Option<String>,
     pub priority: Option<String>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct UpdateIssueResponse {
     pub issue_id: Uuid,
     pub title: String,
@@ -184,18 +198,25 @@ pub struct UpdateIssueResponse {
     pub priority: String,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct BoardResponse {
     pub columns: BTreeMap<String, Vec<IssueListItem>>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, ToSchema)]
 pub struct UpdateIssueBoardPositionRequest {
     pub status: String,
     pub position: i32,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
+pub struct UpdateIssueBoardPositionResponse {
+    pub issue_id: Uuid,
+    pub status: String,
+    pub position: i32,
+}
+
+#[derive(Serialize, ToSchema)]
 pub struct IssueDetailResponse {
     pub issue_id: Uuid,
     pub display_key: String,
@@ -210,7 +231,7 @@ pub struct IssueDetailResponse {
     pub updated_at: DateTime<Utc>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, ToSchema)]
 pub struct AssignIssueRequest {
     pub user_id: Uuid,
 }

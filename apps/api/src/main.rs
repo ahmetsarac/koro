@@ -33,6 +33,8 @@ async fn main() -> anyhow::Result<()> {
     let listener = tokio::net::TcpListener::bind(&addr).await?;
 
     println!("Koro API listening on http://localhost:{port}");
+    println!("OpenAPI JSON: http://localhost:{port}/openapi.json");
+    println!("Swagger UI:  http://localhost:{port}/swagger-ui/");
 
     axum::serve(listener, app).await?;
 
