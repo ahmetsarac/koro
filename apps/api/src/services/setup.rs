@@ -33,7 +33,7 @@ pub async fn setup_platform_admin(
     })?;
 
     if user_count > 0 {
-        return Err(AppError::Conflict);
+        return Err(AppError::Conflict(None));
     }
 
     let password_hash = auth::hash_password(&password).map_err(|e| {

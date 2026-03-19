@@ -1,5 +1,15 @@
-use sqlx::{Postgres, Transaction};
+use sqlx::{PgPool, Postgres, Transaction};
 use uuid::Uuid;
+
+pub async fn find_org_id_by_slug(
+    pool: &PgPool,
+    slug: &str,
+) -> Result<Option<Uuid>, sqlx::Error> {
+    sqlx::query_scalar::<_, Uuid>("SELECT id FROM organizations WHERE slug = $1")
+        .bind(slug)
+        .fetch_optional(pool)
+        .await
+}
 
 pub async fn insert_organization(
     tx: &mut Transaction<'_, Postgres>,
