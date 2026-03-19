@@ -1,6 +1,21 @@
 use sqlx::{PgPool, Postgres, Transaction};
 use uuid::Uuid;
 
+pub async fn is_org_member(
+    pool: &PgPool,
+    org_id: Uuid,
+    user_id: Uuid,
+) -> Result<bool, sqlx::Error> {
+    let found = sqlx::query_scalar::<_, i32>(
+        r#"SELECT 1 FROM org_members WHERE org_id = $1 AND user_id = $2"#,
+    )
+    .bind(org_id)
+    .bind(user_id)
+    .fetch_optional(pool)
+    .await?;
+    Ok(found.is_some())
+}
+
 pub async fn find_org_id_by_slug(
     pool: &PgPool,
     slug: &str,

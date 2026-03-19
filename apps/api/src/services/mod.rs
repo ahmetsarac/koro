@@ -5,6 +5,7 @@ pub mod health;
 pub mod invites;
 pub mod orgs;
 pub mod projects;
+pub mod relations;
 pub mod setup;
 pub mod upload;
 pub mod users;
