@@ -1,7 +1,10 @@
 pub mod auth;
+pub mod comments;
 pub mod events;
 pub mod health;
+pub mod invites;
 pub mod orgs;
+pub mod projects;
 pub mod setup;
 pub mod upload;
 pub mod users;

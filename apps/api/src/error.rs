@@ -15,6 +15,8 @@ pub enum AppError {
     ServiceUnavailable(Option<&'static str>),
     Unauthorized,
     PayloadTooLarge(Option<&'static str>),
+    /// HTTP 410 — e.g. invite used or expired
+    Gone,
 }
 
 impl IntoResponse for AppError {
@@ -36,6 +38,7 @@ impl IntoResponse for AppError {
                 (StatusCode::PAYLOAD_TOO_LARGE, msg).into_response()
             }
             AppError::PayloadTooLarge(None) => StatusCode::PAYLOAD_TOO_LARGE.into_response(),
+            AppError::Gone => StatusCode::GONE.into_response(),
         }
     }
 }

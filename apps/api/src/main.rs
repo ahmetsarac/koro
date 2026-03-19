@@ -7,7 +7,7 @@ mod auth;
 mod auth_user;
 mod db;
 mod error;
-mod http;
+mod issue_key;
 mod jwt;
 mod repos;
 mod services;

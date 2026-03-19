@@ -4,6 +4,7 @@ use uuid::Uuid;
 
 use crate::{
     error::AppError,
+    issue_key::parse_issue_key,
     repos::{events as events_repo, orgs as orgs_repo},
 };
 
@@ -26,12 +27,6 @@ pub struct EventItem {
 #[derive(Serialize)]
 pub struct ListEventsResponse {
     pub items: Vec<EventItem>,
-}
-
-fn parse_issue_key(key: &str) -> Option<(&str, i32)> {
-    let (project_key, seq_str) = key.split_once('-')?;
-    let seq = seq_str.parse::<i32>().ok()?;
-    Some((project_key, seq))
 }
 
 pub async fn list_issue_events(
