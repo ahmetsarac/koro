@@ -3,7 +3,6 @@ use tracing_subscriber;
 mod auth;
 mod comments;
 mod core;
-mod error;
 mod events;
 mod invites;
 mod issues;

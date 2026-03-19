@@ -6,17 +6,19 @@ use axum::{
 
 use crate::{
     auth::user::AuthUser,
-    core::state::AppState,
-    error::AppError,
-    relations::service as relations_service,
+    core::{state::AppState, AppError},
+    relations::{
+        models::{CreateRelationRequest, CreateRelationResponse, GetRelationsResponse},
+        service as relations_service,
+    },
 };
 
 pub async fn create_relation(
     Path((org_slug, source_issue_key)): Path<(String, String)>,
     State(state): State<AppState>,
     AuthUser(user_id): AuthUser,
-    Json(req): Json<relations_service::CreateRelationRequest>,
-) -> Result<(StatusCode, Json<relations_service::CreateRelationResponse>), AppError> {
+    Json(req): Json<CreateRelationRequest>,
+) -> Result<(StatusCode, Json<CreateRelationResponse>), AppError> {
     let res = relations_service::create_relation(
         &state.db,
         &org_slug,
@@ -32,7 +34,7 @@ pub async fn get_relations(
     Path((org_slug, source_issue_key)): Path<(String, String)>,
     State(state): State<AppState>,
     AuthUser(user_id): AuthUser,
-) -> Result<(StatusCode, Json<relations_service::GetRelationsResponse>), AppError> {
+) -> Result<(StatusCode, Json<GetRelationsResponse>), AppError> {
     let res =
         relations_service::get_relations(&state.db, &org_slug, &source_issue_key, user_id).await?;
     Ok((StatusCode::OK, Json(res)))

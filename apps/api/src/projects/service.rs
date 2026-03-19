@@ -1,44 +1,13 @@
-use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 use uuid::Uuid;
 
 use crate::{
-    error::AppError,
+    core::AppError,
     invites::repository as invites_repo,
     orgs::repository as orgs_repo,
+    projects::models::*,
     projects::repository as projects_repo,
 };
-
-#[derive(Deserialize)]
-pub struct ListMyProjectsQuery {
-    pub limit: Option<i32>,
-    pub offset: Option<i32>,
-    pub q: Option<String>,
-}
-
-#[derive(Serialize)]
-pub struct ProjectItem {
-    pub id: Uuid,
-    pub project_key: String,
-    pub name: String,
-    pub description: Option<String>,
-    pub org_id: Uuid,
-    pub org_name: String,
-    pub org_slug: String,
-    pub issue_count: i64,
-    pub member_count: i64,
-    pub my_role: String,
-    pub created_at: chrono::DateTime<chrono::Utc>,
-}
-
-#[derive(Serialize)]
-pub struct ListMyProjectsResponse {
-    pub items: Vec<ProjectItem>,
-    pub total: i64,
-    pub limit: i32,
-    pub offset: i32,
-    pub has_more: bool,
-}
 
 pub async fn list_projects(
     pool: &PgPool,
@@ -103,21 +72,6 @@ pub async fn list_projects(
     })
 }
 
-#[derive(Serialize)]
-pub struct GetProjectResponse {
-    pub id: Uuid,
-    pub project_key: String,
-    pub name: String,
-    pub description: Option<String>,
-    pub org_id: Uuid,
-    pub org_name: String,
-    pub org_slug: String,
-    pub issue_count: i64,
-    pub member_count: i64,
-    pub my_role: String,
-    pub created_at: chrono::DateTime<chrono::Utc>,
-}
-
 pub async fn get_project(
     pool: &PgPool,
     user_id: Uuid,
@@ -153,20 +107,6 @@ pub async fn get_project(
         my_role: row.my_role,
         created_at: row.created_at,
     })
-}
-
-#[derive(Deserialize)]
-pub struct CreateProjectRequest {
-    pub project_key: String,
-    pub name: String,
-    pub description: Option<String>,
-}
-
-#[derive(Serialize)]
-pub struct CreateProjectResponse {
-    pub project_id: Uuid,
-    pub project_key: String,
-    pub name: String,
 }
 
 pub async fn create_project(
@@ -222,19 +162,6 @@ pub async fn create_project(
         project_key: pk,
         name,
     })
-}
-
-#[derive(Serialize)]
-pub struct ProjectMemberItem {
-    pub user_id: Uuid,
-    pub name: String,
-    pub email: String,
-    pub project_role: String,
-}
-
-#[derive(Serialize)]
-pub struct ListProjectMembersResponse {
-    pub items: Vec<ProjectMemberItem>,
 }
 
 pub async fn list_project_members(

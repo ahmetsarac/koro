@@ -15,8 +15,7 @@ use uuid::Uuid;
 
 use crate::{
     auth::user::AuthUser,
-    core::state::AppState,
-    error::AppError,
+    core::{state::AppState, AppError},
 };
 
 const UPLOAD_PREFIX: &str = "attachments";

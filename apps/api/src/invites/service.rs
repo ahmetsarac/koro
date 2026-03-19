@@ -1,20 +1,14 @@
 use chrono::{Duration, Utc};
-use serde::Serialize;
 use sqlx::PgPool;
 use uuid::Uuid;
 
 use crate::{
     auth::password,
-    error::AppError,
-    invites::{crypto, repository as invites_repo},
+    core::AppError,
+    invites::{crypto, models::*, repository as invites_repo},
 };
 
 const INVITE_URL_PREFIX: &str = "http://localhost:3001/invites/";
-
-#[derive(Serialize)]
-pub struct CreateInviteResponse {
-    pub invite_url: String,
-}
 
 pub async fn create_invite(
     pool: &PgPool,
@@ -58,14 +52,6 @@ pub async fn create_invite(
     })
 }
 
-#[derive(Serialize)]
-pub struct GetInviteResponse {
-    pub org_name: String,
-    pub email: String,
-    pub role: String,
-    pub expires_at: String,
-}
-
 pub async fn get_invite(pool: &PgPool, token: &str) -> Result<GetInviteResponse, AppError> {
     let token_hash = crypto::hash_token(token);
 
@@ -87,18 +73,6 @@ pub async fn get_invite(pool: &PgPool, token: &str) -> Result<GetInviteResponse,
         role: row.invited_role,
         expires_at: row.expires_at.to_rfc3339(),
     })
-}
-
-pub struct AcceptInviteInput {
-    pub name: String,
-    pub password: String,
-}
-
-#[derive(Serialize)]
-pub struct AcceptInviteResponse {
-    pub user_id: Uuid,
-    pub org_id: Uuid,
-    pub org_role: String,
 }
 
 pub async fn accept_invite(

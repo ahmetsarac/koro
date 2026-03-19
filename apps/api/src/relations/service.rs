@@ -1,27 +1,16 @@
-use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 use uuid::Uuid;
 
 use crate::{
-    error::AppError,
+    core::AppError,
     events::repository as events_repo,
     issues::models::parse_issue_key,
     orgs::repository as orgs_repo,
+    relations::models::*,
     relations::repository as relations_repo,
 };
 
 const ALLOWED_RELATION_TYPES: [&str; 3] = ["blocks", "relates_to", "duplicate"];
-
-#[derive(Deserialize)]
-pub struct CreateRelationRequest {
-    pub relation_type: String,
-    pub target_issue_key: String,
-}
-
-#[derive(Serialize)]
-pub struct CreateRelationResponse {
-    pub relation_id: Uuid,
-}
 
 pub async fn create_relation(
     pool: &PgPool,
@@ -109,21 +98,6 @@ pub async fn create_relation(
     }
 
     Ok(CreateRelationResponse { relation_id })
-}
-
-#[derive(Serialize)]
-pub struct RelationItem {
-    pub issue_key: String,
-    pub title: String,
-}
-
-#[derive(Serialize)]
-pub struct GetRelationsResponse {
-    pub blocking: Vec<RelationItem>,
-    pub blocked_by: Vec<RelationItem>,
-    pub related: Vec<RelationItem>,
-    pub duplicates: Vec<RelationItem>,
-    pub duplicated_by: Vec<RelationItem>,
 }
 
 pub async fn get_relations(

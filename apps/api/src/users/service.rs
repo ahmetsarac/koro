@@ -1,24 +1,7 @@
-use serde::Serialize;
 use sqlx::PgPool;
 use uuid::Uuid;
 
-use crate::{auth::password, error::AppError, users::repository as users_repo};
-
-#[derive(Serialize)]
-pub struct UserOrganization {
-    pub id: uuid::Uuid,
-    pub name: String,
-    pub slug: String,
-    pub role: String,
-}
-
-#[derive(Serialize)]
-pub struct MeResponse {
-    pub id: uuid::Uuid,
-    pub email: String,
-    pub name: String,
-    pub organizations: Vec<UserOrganization>,
-}
+use crate::{auth::password, core::AppError, users::models::*, users::repository as users_repo};
 
 pub async fn get_me(pool: &PgPool, user_id: Uuid) -> Result<MeResponse, AppError> {
     let user = users_repo::find_user_by_id(pool, user_id)
@@ -52,15 +35,6 @@ pub async fn get_me(pool: &PgPool, user_id: Uuid) -> Result<MeResponse, AppError
         name: user.name,
         organizations,
     })
-}
-
-// --- Platform setup (first admin) ------------------------------------------
-
-#[derive(Serialize)]
-pub struct SetupResponse {
-    pub user_id: uuid::Uuid,
-    pub email: String,
-    pub platform_role: &'static str,
 }
 
 pub async fn setup_platform_admin(

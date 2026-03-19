@@ -1,37 +1,16 @@
-use serde::Serialize;
 use sqlx::PgPool;
 use uuid::Uuid;
 
 use crate::{
-    auth::{jwt, password, repository as auth_repo},
-    error::AppError,
+    auth::{jwt, models::*, password, repository as auth_repo},
+    core::AppError,
 };
-
-#[derive(Serialize)]
-pub struct AuthTokensResponse {
-    pub access_token: String,
-    pub refresh_token: String,
-}
-
-impl From<jwt::TokenPair> for AuthTokensResponse {
-    fn from(tokens: jwt::TokenPair) -> Self {
-        Self {
-            access_token: tokens.access_token,
-            refresh_token: tokens.refresh_token,
-        }
-    }
-}
 
 pub fn require_jwt_secret() -> Result<String, AppError> {
     std::env::var("JWT_SECRET").map_err(|_| {
         tracing::error!("JWT_SECRET is not set");
         AppError::Internal
     })
-}
-
-pub struct LoginInput {
-    pub email: String,
-    pub password: String,
 }
 
 pub async fn login(
@@ -64,12 +43,6 @@ pub async fn login(
     })?;
 
     Ok(AuthTokensResponse::from(tokens))
-}
-
-pub struct SignupInput {
-    pub email: String,
-    pub name: String,
-    pub password: String,
 }
 
 pub async fn signup(

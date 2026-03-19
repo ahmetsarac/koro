@@ -1,5 +1,4 @@
 use axum::{Json, http::StatusCode, response::IntoResponse};
-use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 use std::collections::{BTreeMap, HashMap};
 
@@ -8,27 +7,18 @@ use crate::{
     orgs::repository as orgs_repo,
 };
 
-use super::{models::parse_issue_key, repository as issues_repo};
-
-pub use issues_repo::{ListMyIssuesQuery, MyIssueSortBy, SortDirection};
+use super::{
+    models::{
+        parse_issue_key, AssignIssueRequest, BoardResponse, CreateIssueRequest,
+        CreateIssueResponse, IssueDetailResponse, IssueListItem, ListIssuesResponse,
+        ListMyIssuesQuery, ListMyIssuesResponse, ListProjectIssuesResponse, MyIssueItem,
+        MyIssuesCursor, UpdateIssueBoardPositionRequest, UpdateIssueRequest,
+        UpdateIssueResponse, UpdateIssueStatusRequest, UpdateIssueStatusResponse,
+    },
+    repository as issues_repo,
+};
 
 // --- Create ----------------------------------------------------------------
-
-#[derive(serde::Deserialize)]
-pub struct CreateIssueRequest {
-    pub title: String,
-    pub description: Option<String>,
-    pub assignee_id: Option<uuid::Uuid>,
-    pub status: Option<String>,
-    pub priority: Option<String>,
-}
-
-#[derive(Serialize)]
-pub struct CreateIssueResponse {
-    pub issue_id: uuid::Uuid,
-    pub display_key: String,
-    pub title: String,
-}
 
 pub async fn create_issue(
     pool: &PgPool,
@@ -128,65 +118,6 @@ pub async fn create_issue(
 
 // --- List types ------------------------------------------------------------
 
-#[derive(Serialize)]
-pub struct IssueListItem {
-    pub issue_id: uuid::Uuid,
-    pub display_key: String,
-    pub title: String,
-    pub status: String,
-}
-
-#[derive(Serialize)]
-pub struct ListIssuesResponse {
-    pub items: Vec<IssueListItem>,
-}
-
-#[derive(Serialize)]
-pub struct ListProjectIssuesResponse {
-    pub items: Vec<IssueListItem>,
-    pub total: i64,
-    pub limit: i64,
-    pub offset: i64,
-    pub has_more: bool,
-}
-
-#[derive(Serialize)]
-pub struct MyIssueItem {
-    pub id: uuid::Uuid,
-    pub display_key: String,
-    pub title: String,
-    pub status: String,
-    pub priority: String,
-}
-
-#[derive(Debug, Default, Serialize)]
-pub struct MyIssueFacets {
-    pub status: HashMap<String, i64>,
-    pub priority: HashMap<String, i64>,
-}
-
-#[derive(Serialize)]
-pub struct ListMyIssuesResponse {
-    pub items: Vec<MyIssueItem>,
-    pub total: i64,
-    pub limit: i64,
-    pub offset: i64,
-    pub next_cursor: Option<String>,
-    pub has_more: bool,
-    pub sort_by: MyIssueSortBy,
-    pub sort_dir: SortDirection,
-    pub facets: MyIssueFacets,
-}
-
-impl From<issues_repo::MyIssueFacets> for MyIssueFacets {
-    fn from(f: issues_repo::MyIssueFacets) -> Self {
-        Self {
-            status: f.status,
-            priority: f.priority,
-        }
-    }
-}
-
 fn my_item_from_row(row: issues_repo::MyIssueRow) -> MyIssueItem {
     MyIssueItem {
         id: row.id,
@@ -216,7 +147,7 @@ pub async fn list_my_issues(
     }
 
     let decoded_cursor = match query.cursor.as_deref() {
-        Some(raw) => match serde_json::from_str::<issues_repo::MyIssuesCursor>(raw) {
+        Some(raw) => match serde_json::from_str::<MyIssuesCursor>(raw) {
             Ok(cursor) => Some(cursor),
             Err(_) => return (StatusCode::BAD_REQUEST, "invalid cursor").into_response(),
         },
@@ -295,7 +226,7 @@ pub async fn list_my_issues(
             has_more,
             sort_by,
             sort_dir,
-            facets: facets_raw.into(),
+            facets: facets_raw,
         }),
     )
         .into_response()
@@ -487,17 +418,6 @@ pub async fn list_project_issues_by_key(
 
 // --- Status / patch --------------------------------------------------------
 
-#[derive(serde::Deserialize)]
-pub struct UpdateIssueStatusRequest {
-    pub status: String,
-}
-
-#[derive(serde::Serialize)]
-pub struct UpdateIssueStatusResponse {
-    pub issue_id: uuid::Uuid,
-    pub status: String,
-}
-
 pub async fn update_issue_status(
     pool: &PgPool,
     issue_id: uuid::Uuid,
@@ -541,21 +461,6 @@ pub async fn update_issue_status(
         Json(UpdateIssueStatusResponse { issue_id, status }),
     )
         .into_response()
-}
-
-#[derive(serde::Deserialize)]
-pub struct UpdateIssueRequest {
-    pub title: Option<String>,
-    pub description: Option<String>,
-    pub priority: Option<String>,
-}
-
-#[derive(serde::Serialize)]
-pub struct UpdateIssueResponse {
-    pub issue_id: uuid::Uuid,
-    pub title: String,
-    pub description: Option<String>,
-    pub priority: String,
 }
 
 pub async fn update_issue(
@@ -636,11 +541,6 @@ pub async fn update_issue(
 }
 
 // --- Board -----------------------------------------------------------------
-
-#[derive(serde::Serialize)]
-pub struct BoardResponse {
-    pub columns: BTreeMap<String, Vec<IssueListItem>>,
-}
 
 fn board_columns_from_rows(project_key: &str, rows: Vec<issues_repo::IssueSummaryRow>) -> BTreeMap<String, Vec<IssueListItem>> {
     let mut columns: BTreeMap<String, Vec<IssueListItem>> = BTreeMap::new();
@@ -734,12 +634,6 @@ pub async fn get_board_by_key(
     (StatusCode::OK, Json(BoardResponse { columns })).into_response()
 }
 
-#[derive(serde::Deserialize)]
-pub struct UpdateIssueBoardPositionRequest {
-    pub status: String,
-    pub position: i32,
-}
-
 pub async fn update_issue_board_position(
     pool: &PgPool,
     issue_id: uuid::Uuid,
@@ -790,21 +684,6 @@ pub async fn update_issue_board_position(
 }
 
 // --- Detail ----------------------------------------------------------------
-
-#[derive(serde::Serialize)]
-pub struct IssueDetailResponse {
-    pub issue_id: uuid::Uuid,
-    pub display_key: String,
-    pub title: String,
-    pub description: Option<String>,
-    pub status: String,
-    pub priority: String,
-    pub assignee_id: Option<uuid::Uuid>,
-    pub assignee_name: Option<String>,
-    pub project_id: uuid::Uuid,
-    pub created_at: chrono::DateTime<chrono::Utc>,
-    pub updated_at: chrono::DateTime<chrono::Utc>,
-}
 
 fn detail_from_row(row: issues_repo::IssueFullRow) -> IssueDetailResponse {
     let display_key = format!("{}-{}", row.project_key, row.key_seq);
@@ -887,11 +766,6 @@ pub async fn get_issue_by_key(
 }
 
 // --- Assign ----------------------------------------------------------------
-
-#[derive(Deserialize)]
-pub struct AssignIssueRequest {
-    pub user_id: uuid::Uuid,
-}
 
 pub async fn assign_issue(
     pool: &PgPool,

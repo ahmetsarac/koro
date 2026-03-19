@@ -6,13 +6,19 @@ use std::collections::HashMap;
 
 use crate::{auth::user::AuthUser, core::state::AppState};
 
-use super::service;
+use super::{
+    models::{
+        AssignIssueRequest, CreateIssueRequest, ListMyIssuesQuery, UpdateIssueBoardPositionRequest,
+        UpdateIssueRequest, UpdateIssueStatusRequest,
+    },
+    service,
+};
 
 pub async fn create_issue(
     Path(project_id): Path<uuid::Uuid>,
     State(state): State<AppState>,
     AuthUser(user_id): AuthUser,
-    Json(req): Json<service::CreateIssueRequest>,
+    Json(req): Json<CreateIssueRequest>,
 ) -> impl axum::response::IntoResponse {
     service::create_issue(&state.db, project_id, user_id, req).await
 }
@@ -20,7 +26,7 @@ pub async fn create_issue(
 pub async fn list_my_issues(
     State(state): State<AppState>,
     AuthUser(user_id): AuthUser,
-    Query(query): Query<service::ListMyIssuesQuery>,
+    Query(query): Query<ListMyIssuesQuery>,
 ) -> impl axum::response::IntoResponse {
     service::list_my_issues(&state.db, user_id, query).await
 }
@@ -47,7 +53,7 @@ pub async fn update_issue_status(
     Path(issue_id): Path<uuid::Uuid>,
     State(state): State<AppState>,
     AuthUser(user_id): AuthUser,
-    Json(req): Json<service::UpdateIssueStatusRequest>,
+    Json(req): Json<UpdateIssueStatusRequest>,
 ) -> impl axum::response::IntoResponse {
     service::update_issue_status(&state.db, issue_id, user_id, req).await
 }
@@ -56,7 +62,7 @@ pub async fn update_issue(
     Path((org_slug, issue_key)): Path<(String, String)>,
     State(state): State<AppState>,
     AuthUser(user_id): AuthUser,
-    Json(req): Json<service::UpdateIssueRequest>,
+    Json(req): Json<UpdateIssueRequest>,
 ) -> impl axum::response::IntoResponse {
     service::update_issue(&state.db, org_slug, issue_key, user_id, req).await
 }
@@ -81,7 +87,7 @@ pub async fn update_issue_board_position(
     Path(issue_id): Path<uuid::Uuid>,
     State(state): State<AppState>,
     AuthUser(user_id): AuthUser,
-    Json(req): Json<service::UpdateIssueBoardPositionRequest>,
+    Json(req): Json<UpdateIssueBoardPositionRequest>,
 ) -> impl axum::response::IntoResponse {
     service::update_issue_board_position(&state.db, issue_id, user_id, req).await
 }
@@ -106,7 +112,7 @@ pub async fn assign_issue(
     Path((org_slug, issue_key)): Path<(String, String)>,
     State(state): State<AppState>,
     AuthUser(_actor_id): AuthUser,
-    Json(req): Json<service::AssignIssueRequest>,
+    Json(req): Json<AssignIssueRequest>,
 ) -> impl axum::response::IntoResponse {
     service::assign_issue(&state.db, org_slug, issue_key, req).await
 }

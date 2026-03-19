@@ -1,73 +1,8 @@
-use chrono::{DateTime, Utc};
-use serde::{Deserialize, Serialize};
 use sqlx::{FromRow, PgPool, Postgres, QueryBuilder};
 
-#[derive(Debug, Clone, Copy, Deserialize, Serialize, PartialEq, Eq)]
-#[serde(rename_all = "snake_case")]
-pub enum MyIssueSortBy {
-    CreatedAt,
-    UpdatedAt,
-    KeySeq,
-    Title,
-    Status,
-    Priority,
-}
-
-impl Default for MyIssueSortBy {
-    fn default() -> Self {
-        Self::UpdatedAt
-    }
-}
-
-impl MyIssueSortBy {
-    pub fn as_sql(self) -> &'static str {
-        match self {
-            Self::CreatedAt => "i.created_at",
-            Self::UpdatedAt => "i.updated_at",
-            Self::KeySeq => "i.key_seq",
-            Self::Title => "i.title",
-            Self::Status => "i.status",
-            Self::Priority => "i.priority",
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, Deserialize, Serialize, PartialEq, Eq)]
-#[serde(rename_all = "snake_case")]
-pub enum SortDirection {
-    Asc,
-    Desc,
-}
-
-impl Default for SortDirection {
-    fn default() -> Self {
-        Self::Desc
-    }
-}
-
-impl SortDirection {
-    pub fn as_sql(self) -> &'static str {
-        match self {
-            Self::Asc => "ASC",
-            Self::Desc => "DESC",
-        }
-    }
-
-    pub fn comparison_sql(self) -> &'static str {
-        match self {
-            Self::Asc => ">",
-            Self::Desc => "<",
-        }
-    }
-}
-
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct MyIssuesCursor {
-    pub id: uuid::Uuid,
-    pub sort_text: Option<String>,
-    pub sort_int: Option<i32>,
-    pub sort_timestamp: Option<DateTime<Utc>>,
-}
+use crate::issues::models::{
+    ListMyIssuesQuery, MyIssueFacets, MyIssueSortBy, MyIssuesCursor, SortDirection,
+};
 
 #[derive(FromRow)]
 pub struct MyIssueRow {
@@ -77,8 +12,8 @@ pub struct MyIssueRow {
     pub title: String,
     pub status: String,
     pub priority: String,
-    pub created_at: DateTime<Utc>,
-    pub updated_at: DateTime<Utc>,
+    pub created_at: chrono::DateTime<chrono::Utc>,
+    pub updated_at: chrono::DateTime<chrono::Utc>,
 }
 
 pub fn cursor_from_row(sort_by: MyIssueSortBy, row: &MyIssueRow) -> MyIssuesCursor {
@@ -120,25 +55,6 @@ pub fn cursor_from_row(sort_by: MyIssueSortBy, row: &MyIssueRow) -> MyIssuesCurs
             sort_timestamp: None,
         },
     }
-}
-
-#[derive(Deserialize)]
-pub struct ListMyIssuesQuery {
-    pub limit: Option<i64>,
-    pub offset: Option<i64>,
-    pub cursor: Option<String>,
-    pub q: Option<String>,
-    pub status: Option<String>,
-    pub priority: Option<String>,
-    pub sort_by: Option<MyIssueSortBy>,
-    pub sort_dir: Option<SortDirection>,
-    pub filter_type: Option<String>,
-}
-
-#[derive(Debug, Default, Serialize)]
-pub struct MyIssueFacets {
-    pub status: std::collections::HashMap<String, i64>,
-    pub priority: std::collections::HashMap<String, i64>,
 }
 
 #[derive(FromRow)]

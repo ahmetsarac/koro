@@ -1,34 +1,13 @@
-use serde::Serialize;
 use sqlx::PgPool;
 use uuid::Uuid;
 
 use crate::{
-    error::AppError,
+    core::AppError,
+    events::models::*,
     events::repository as events_repo,
     issues::models::parse_issue_key,
     orgs::repository as orgs_repo,
 };
-
-#[derive(Serialize)]
-pub struct EventActor {
-    pub user_id: Uuid,
-    pub name: String,
-    pub email: String,
-}
-
-#[derive(Serialize)]
-pub struct EventItem {
-    pub event_id: Uuid,
-    pub event_type: String,
-    pub created_at: chrono::DateTime<chrono::Utc>,
-    pub actor: Option<EventActor>,
-    pub payload: serde_json::Value,
-}
-
-#[derive(Serialize)]
-pub struct ListEventsResponse {
-    pub items: Vec<EventItem>,
-}
 
 pub async fn list_issue_events(
     pool: &PgPool,
