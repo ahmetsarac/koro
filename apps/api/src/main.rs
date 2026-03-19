@@ -1,37 +1,28 @@
 use tracing_subscriber;
 
-mod auth;
-mod comments;
-mod core;
-mod events;
-mod invites;
-mod issues;
-mod orgs;
-mod projects;
-mod relations;
-mod users;
+mod modules;
 
-use core::state::AppState;
+use modules::core::state::AppState;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt::init();
 
-    core::config::load_dotenv();
+    modules::core::config::load_dotenv();
 
     let database_url =
         std::env::var("DATABASE_URL").expect("DATABASE_URL is not set (check root .env)");
 
-    let pool = core::db::create_pool(&database_url).await?;
+    let pool = modules::core::db::create_pool(&database_url).await?;
 
-    core::db::ping(&pool).await?;
+    modules::core::db::ping(&pool).await?;
 
-    let upload_store = core::uploads::build_upload_store();
+    let upload_store = modules::core::uploads::build_upload_store();
     let state = AppState {
         db: pool,
         upload_store,
     };
-    let app = core::http::router(state);
+    let app = modules::core::http::router(state);
 
     let port: u16 = std::env::var("PORT")
         .unwrap_or_else(|_| "3001".to_string())
