@@ -199,7 +199,7 @@ pub struct ApiDoc;
 pub fn router(state: AppState) -> Router {
     Router::new()
         .merge(
-            SwaggerUi::new("/swagger-ui")
+            SwaggerUi::new("/swagger")
                 .url("/openapi.json", ApiDoc::openapi()),
         )
         .route("/health", get(health))

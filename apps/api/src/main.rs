@@ -34,7 +34,7 @@ async fn main() -> anyhow::Result<()> {
 
     println!("Koro API listening on http://localhost:{port}");
     println!("OpenAPI JSON: http://localhost:{port}/openapi.json");
-    println!("Swagger UI:  http://localhost:{port}/swagger-ui/");
+    println!("Swagger UI:  http://localhost:{port}/swagger/");
 
     axum::serve(listener, app).await?;
 
