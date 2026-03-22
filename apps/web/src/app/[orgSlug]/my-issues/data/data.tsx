@@ -10,33 +10,17 @@ import {
   Timer,
 } from "lucide-react"
 
-export const statuses = [
-  {
-    value: "backlog",
-    label: "Backlog",
-    icon: HelpCircle,
-  },
-  {
-    value: "todo",
-    label: "Todo",
-    icon: Circle,
-  },
-  {
-    value: "in_progress",
-    label: "In Progress",
-    icon: Timer,
-  },
-  {
-    value: "blocked",
-    label: "Blocked",
-    icon: Ban,
-  },
-  {
-    value: "done",
-    label: "Done",
-    icon: CheckCircle,
-  },
-]
+const categoryRowIcon: Record<string, typeof Circle> = {
+  backlog: HelpCircle,
+  unstarted: Circle,
+  started: Timer,
+  completed: CheckCircle,
+  canceled: Ban,
+}
+
+export function iconForIssueCategory(category: string) {
+  return categoryRowIcon[category] ?? Circle
+}
 
 export const priorities = [
   {

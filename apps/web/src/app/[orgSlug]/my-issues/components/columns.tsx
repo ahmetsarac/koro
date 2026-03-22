@@ -3,6 +3,7 @@
 import * as React from "react"
 import Link from "next/link"
 import { type ColumnDef } from "@tanstack/react-table"
+import { Ban, Check } from "lucide-react"
 
 import { Checkbox } from "@/components/ui/checkbox"
 import { Badge } from "@/components/ui/badge"
@@ -12,24 +13,12 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { Check } from "lucide-react"
 
-import { priorities, statuses } from "../data/data"
+import { priorities, iconForIssueCategory } from "../data/data"
 import { type Issue } from "../data/schema"
 import { DataTableColumnHeader } from "./data-table-column-header"
 import { DataTableRowActions } from "./data-table-row-actions"
 import { updateIssueInCaches } from "@/lib/cache/issues-cache"
-
-async function updateIssueStatus(issueId: string, status: string): Promise<boolean> {
-  const response = await fetch(`/api/issues/${issueId}/status`, {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json" },
-    credentials: "same-origin",
-    body: JSON.stringify({ status }),
-  })
-
-  return response.ok
-}
 
 async function updateIssuePriority(
   orgSlug: string,
@@ -106,80 +95,43 @@ export const createColumns = (orgSlug: string): ColumnDef<Issue>[] => [
     ),
   },
   {
-    accessorKey: "status",
-    size: 120,
+    id: "status",
+    accessorKey: "workflow_status_id",
+    size: 160,
     header: ({ column }) => (
       <DataTableColumnHeader column={column} title="Status" />
     ),
     cell: ({ row }) => {
       const issue = row.original
-      const [currentStatus, setCurrentStatus] = React.useState(
-        row.getValue("status") as string
-      )
-      const [isUpdating, setIsUpdating] = React.useState(false)
-
-      const status = statuses.find(
-        (status) => status.value === currentStatus
-      )
-
-      if (!status) {
-        return null
-      }
-
-      const StatusIcon = status.icon
-
-      const handleChange = async (newStatus: string) => {
-        if (isUpdating || newStatus === currentStatus) return
-
-        setIsUpdating(true)
-        try {
-          const success = await updateIssueStatus(issue.id, newStatus)
-          if (success) {
-            setCurrentStatus(newStatus)
-            updateIssueInCaches(issue.display_key, { status: newStatus })
-          }
-        } finally {
-          setIsUpdating(false)
-        }
-      }
-
+      const StatusIcon = iconForIssueCategory(issue.status_category)
       return (
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild disabled={isUpdating}>
-            <button className="focus:outline-none">
-              <Badge
-                variant="outline"
-                className="flex w-fit items-center gap-2 justify-start cursor-pointer hover:bg-muted/60"
-              >
-                {StatusIcon && (
-                  <StatusIcon className="size-3.5 text-muted-foreground" />
-                )}
-                <span className="text-xs">{status.label}</span>
-              </Badge>
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start">
-            {statuses.map((s) => {
-              const Icon = s.icon
-              const isActive = s.value === currentStatus
-              return (
-                <DropdownMenuItem
-                  key={s.value}
-                  onClick={() => handleChange(s.value)}
-                  className="gap-2 text-xs"
-                >
-                  {Icon && <Icon className="h-3.5 w-3.5" />}
-                  {s.label}
-                  {isActive && <Check className="h-3.5 w-3.5 ml-auto" />}
-                </DropdownMenuItem>
-              )
-            })}
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <Link
+          href={`/${orgSlug}/issue/${issue.display_key}`}
+          className="inline-flex flex-wrap items-center gap-1.5"
+        >
+          <Badge
+            variant="outline"
+            className="flex w-fit items-center gap-2 justify-start hover:bg-muted/60"
+          >
+            <StatusIcon className="size-3.5 text-muted-foreground" />
+            <span className="text-xs">{issue.status_name}</span>
+          </Badge>
+          {issue.is_blocked ? (
+            <Badge
+              variant="outline"
+              className="gap-1 border-destructive/30 bg-destructive/10 text-destructive text-[10px]"
+            >
+              <Ban className="size-3" />
+              Blocked
+            </Badge>
+          ) : null}
+        </Link>
       )
     },
-    filterFn: (row, id, value) => {
-      return value.includes(row.getValue(id))
+    filterFn: (row, _id, value) => {
+      const v = value as string[] | undefined
+      if (!v?.length) return true
+      return v.includes(row.original.workflow_status_id)
     },
   },
   {
@@ -260,7 +212,7 @@ export const createColumns = (orgSlug: string): ColumnDef<Issue>[] => [
       )
     },
     filterFn: (row, id, value) => {
-      return value.includes(row.getValue(id))
+      return (value as string[]).includes(row.getValue(id))
     },
   },
   {

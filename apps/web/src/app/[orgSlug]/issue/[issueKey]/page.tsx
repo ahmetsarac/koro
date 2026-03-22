@@ -10,6 +10,7 @@ import {
   CheckCircle,
   HelpCircle,
   Ban,
+  XCircle,
   User,
   Calendar,
   Clock,
@@ -29,6 +30,7 @@ import {
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Badge } from "@/components/ui/badge"
+import { Checkbox } from "@/components/ui/checkbox"
 import { Textarea } from "@/components/ui/textarea"
 import { Input } from "@/components/ui/input"
 import {
@@ -46,6 +48,10 @@ interface Issue {
   title: string
   description: string | null
   status: string
+  workflow_status_id: string
+  status_name: string
+  status_category: string
+  is_blocked: boolean
   priority: string
   assignee_id: string | null
   assignee_name: string | null
@@ -68,18 +74,42 @@ interface Comment {
   created_at: string
 }
 
-const statusConfig: Record<
+const categoryStyle: Record<
   string,
-  { label: string; icon: React.ElementType; color: string }
+  { icon: React.ElementType; color: string }
 > = {
-  backlog: { label: "Backlog", icon: HelpCircle, color: "bg-muted text-muted-foreground" },
-  todo: { label: "Todo", icon: Circle, color: "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300" },
-  in_progress: { label: "In Progress", icon: Timer, color: "bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300" },
-  blocked: { label: "Blocked", icon: Ban, color: "bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300" },
-  done: { label: "Done", icon: CheckCircle, color: "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300" },
+  backlog: { icon: HelpCircle, color: "bg-muted text-muted-foreground" },
+  unstarted: {
+    icon: Circle,
+    color: "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300",
+  },
+  started: {
+    icon: Timer,
+    color: "bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300",
+  },
+  completed: {
+    icon: CheckCircle,
+    color: "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300",
+  },
+  canceled: {
+    icon: XCircle,
+    color: "bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-300",
+  },
 }
 
-const statusList = ["backlog", "todo", "in_progress", "blocked", "done"] as const
+interface WorkflowOption {
+  id: string
+  category: string
+  name: string
+  slug: string
+  position: number
+  is_default: boolean
+}
+
+function projectKeyFromDisplayKey(displayKey: string): string {
+  const i = displayKey.lastIndexOf("-")
+  return i >= 0 ? displayKey.slice(0, i) : displayKey
+}
 
 const priorityConfig: Record<
   string,
@@ -158,7 +188,7 @@ async function createComment(
 async function updateIssue(
   orgSlug: string,
   issueKey: string,
-  data: { title?: string; description?: string; priority?: string }
+  data: { title?: string; description?: string; priority?: string; is_blocked?: boolean }
 ): Promise<boolean> {
   const response = await fetch(`/api/orgs/${orgSlug}/issues/${issueKey}`, {
     method: "PATCH",
@@ -219,16 +249,21 @@ async function fetchProjectMembers(
 
 async function updateIssueStatus(
   issueId: string,
-  status: string
-): Promise<boolean> {
+  workflowStatusId: string
+): Promise<{ ok: boolean; status?: string }> {
   const response = await fetch(`/api/issues/${issueId}/status`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     credentials: "same-origin",
-    body: JSON.stringify({ status }),
+    body: JSON.stringify({ workflow_status_id: workflowStatusId }),
   })
-
-  return response.ok
+  if (!response.ok) return { ok: false }
+  try {
+    const j = (await response.json()) as { status?: string }
+    return { ok: true, status: j.status }
+  } catch {
+    return { ok: true }
+  }
 }
 
 export default function IssueDetailPage({
@@ -260,6 +295,8 @@ export default function IssueDetailPage({
   const [isUpdatingAssignee, setIsUpdatingAssignee] = React.useState(false)
   const [projectMembers, setProjectMembers] = React.useState<ProjectMember[]>([])
   const [isLoadingMembers, setIsLoadingMembers] = React.useState(false)
+  const [workflowOptions, setWorkflowOptions] = React.useState<WorkflowOption[]>([])
+  const [isUpdatingBlocked, setIsUpdatingBlocked] = React.useState(false)
 
   React.useEffect(() => {
     async function load() {
@@ -290,6 +327,34 @@ export default function IssueDetailPage({
 
     loadComments()
   }, [orgSlug, issueKey])
+
+  React.useEffect(() => {
+    if (!issue) return
+    const pk = projectKeyFromDisplayKey(issue.display_key)
+    let cancelled = false
+    fetch(`/api/orgs/${orgSlug}/projects/${pk}/workflow-statuses`, {
+      cache: "no-store",
+      credentials: "same-origin",
+    })
+      .then((r) => (r.ok ? r.json() : { groups: [] }))
+      .then((data: { groups?: { category: string; statuses: WorkflowOption[] }[] }) => {
+        if (cancelled) return
+        const flat: WorkflowOption[] = []
+        for (const g of data.groups ?? []) {
+          for (const s of g.statuses) {
+            flat.push({ ...s, category: s.category || g.category })
+          }
+        }
+        flat.sort(
+          (a, b) =>
+            a.category.localeCompare(b.category) || a.position - b.position
+        )
+        setWorkflowOptions(flat)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [issue, orgSlug])
 
   const handleSubmitComment = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -364,18 +429,46 @@ export default function IssueDetailPage({
     }
   }
 
-  const handleStatusChange = async (newStatus: string) => {
-    if (!issue || isUpdatingStatus || newStatus === issue.status) return
+  const handleStatusChange = async (newWorkflowStatusId: string) => {
+    if (!issue || isUpdatingStatus || newWorkflowStatusId === issue.workflow_status_id)
+      return
 
+    const opt = workflowOptions.find((o) => o.id === newWorkflowStatusId)
     setIsUpdatingStatus(true)
     try {
-      const success = await updateIssueStatus(issue.issue_id, newStatus)
-      if (success) {
-        setIssue({ ...issue, status: newStatus })
-        updateIssueInCaches(issue.display_key, { status: newStatus } as { status?: string })
+      const res = await updateIssueStatus(issue.issue_id, newWorkflowStatusId)
+      if (res.ok) {
+        const slug = res.status ?? opt?.slug ?? issue.status
+        setIssue({
+          ...issue,
+          workflow_status_id: newWorkflowStatusId,
+          status: slug,
+          status_name: opt?.name ?? issue.status_name,
+          status_category: opt?.category ?? issue.status_category,
+        })
+        updateIssueInCaches(issue.display_key, {
+          status: slug,
+          workflow_status_id: newWorkflowStatusId,
+          status_name: opt?.name ?? issue.status_name,
+          status_category: opt?.category ?? issue.status_category,
+        })
       }
     } finally {
       setIsUpdatingStatus(false)
+    }
+  }
+
+  const handleBlockedChange = async (checked: boolean) => {
+    if (!issue || isUpdatingBlocked || checked === issue.is_blocked) return
+    setIsUpdatingBlocked(true)
+    try {
+      const ok = await updateIssue(orgSlug, issueKey, { is_blocked: checked })
+      if (ok) {
+        setIssue({ ...issue, is_blocked: checked })
+        updateIssueInCaches(issue.display_key, { is_blocked: checked })
+      }
+    } finally {
+      setIsUpdatingBlocked(false)
     }
   }
 
@@ -435,7 +528,7 @@ export default function IssueDetailPage({
     if (!issue || projectMembers.length > 0 || isLoadingMembers) return
     setIsLoadingMembers(true)
     try {
-      const projectKey = issue.display_key.split("-")[0]
+      const projectKey = projectKeyFromDisplayKey(issue.display_key)
       const members = await fetchProjectMembers(orgSlug, projectKey)
       setProjectMembers(members)
     } finally {
@@ -471,12 +564,12 @@ export default function IssueDetailPage({
     )
   }
 
-  const status = statusConfig[issue.status] || {
-    label: issue.status,
-    icon: Circle,
-    color: "bg-muted text-muted-foreground",
-  }
-  const StatusIcon = status.icon
+  const wfStyle =
+    categoryStyle[issue.status_category] ?? {
+      icon: Circle,
+      color: "bg-muted text-muted-foreground",
+    }
+  const StatusIcon = wfStyle.icon
 
   const priority = priorityConfig[issue.priority] || {
     label: issue.priority,
@@ -485,7 +578,7 @@ export default function IssueDetailPage({
   }
   const PriorityIcon = priority.icon
 
-  const projectKey = issue.display_key.split("-")[0]
+  const projectKey = projectKeyFromDisplayKey(issue.display_key)
 
   return (
     <div className="flex h-[calc(100svh-4.5rem)] flex-col gap-6">
@@ -551,25 +644,25 @@ export default function IssueDetailPage({
           <DropdownMenu>
             <DropdownMenuTrigger asChild disabled={isUpdatingStatus}>
               <button className="focus:outline-none">
-                <Badge className={`${status.color} gap-1.5 cursor-pointer hover:opacity-80 transition-opacity`}>
+                <Badge className={`${wfStyle.color} gap-1.5 cursor-pointer hover:opacity-80 transition-opacity`}>
                   <StatusIcon className="h-3.5 w-3.5" />
-                  {status.label}
+                  {issue.status_name}
                 </Badge>
               </button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="start">
-              {statusList.map((statusKey) => {
-                const config = statusConfig[statusKey]
-                const Icon = config.icon
+            <DropdownMenuContent align="start" className="max-h-72 overflow-y-auto">
+              {workflowOptions.map((o) => {
+                const c = categoryStyle[o.category] ?? categoryStyle.unstarted
+                const Icon = c.icon
                 return (
                   <DropdownMenuItem
-                    key={statusKey}
-                    onClick={() => handleStatusChange(statusKey)}
+                    key={o.id}
+                    onClick={() => void handleStatusChange(o.id)}
                     className="gap-2"
                   >
                     <Icon className="h-4 w-4" />
-                    {config.label}
-                    {statusKey === issue.status && (
+                    {o.name}
+                    {o.id === issue.workflow_status_id && (
                       <Check className="h-4 w-4 ml-auto" />
                     )}
                   </DropdownMenuItem>
@@ -577,6 +670,18 @@ export default function IssueDetailPage({
               })}
             </DropdownMenuContent>
           </DropdownMenu>
+
+          <div className="flex items-center gap-2">
+            <Checkbox
+              id="issue-blocked"
+              checked={issue.is_blocked}
+              disabled={isUpdatingBlocked}
+              onCheckedChange={(v) => void handleBlockedChange(v === true)}
+            />
+            <label htmlFor="issue-blocked" className="text-sm text-muted-foreground">
+              Blocked
+            </label>
+          </div>
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild disabled={isUpdatingPriority}>

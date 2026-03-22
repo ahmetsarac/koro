@@ -16,6 +16,8 @@ import {
   HelpCircle,
   Ban,
   RotateCw,
+  Settings2,
+  XCircle,
 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
@@ -72,7 +74,9 @@ export default function ProjectDetailPage({
   const [isLoading, setIsLoading] = React.useState(true)
   const [error, setError] = React.useState<string | null>(null)
   const [newIssueOpen, setNewIssueOpen] = React.useState(false)
-  const [newIssueInitialStatus, setNewIssueInitialStatus] = React.useState<string | undefined>(undefined)
+  const [newIssueInitialWorkflowStatusId, setNewIssueInitialWorkflowStatusId] = React.useState<
+    string | undefined
+  >(undefined)
 
   React.useEffect(() => {
     async function load() {
@@ -92,17 +96,17 @@ export default function ProjectDetailPage({
 
   if (isLoading) {
     return (
-      <div className="flex flex-col gap-4">
+      <div className="flex min-h-0 flex-1 flex-col gap-4">
         <Skeleton className="h-8 w-48" />
         <Skeleton className="h-4 w-96" />
-        <Skeleton className="h-10 w-full mt-4" />
+        <Skeleton className="mt-4 h-10 w-full" />
       </div>
     )
   }
 
   if (error || !project) {
     return (
-      <div className="flex flex-1 items-center justify-center">
+      <div className="flex min-h-0 flex-1 items-center justify-center">
         <div className="text-center">
           <h2 className="text-lg font-semibold text-destructive">Error</h2>
           <p className="text-muted-foreground">{error || "Project not found"}</p>
@@ -117,8 +121,8 @@ export default function ProjectDetailPage({
   const role = projectRoles.find((r) => r.value === project.my_role)
 
   return (
-    <div className="flex h-[calc(100svh-4.5rem)] flex-col gap-4">
-      <div className="flex items-start justify-between">
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-4 overflow-hidden">
+      <div className="flex shrink-0 items-start justify-between">
         <div>
           <div className="flex items-center gap-3">
             <FolderKanban className="h-6 w-6 text-muted-foreground" />
@@ -131,24 +135,32 @@ export default function ProjectDetailPage({
           )}
         </div>
 
-        <Button data-icon="inline-start" onClick={() => setNewIssueOpen(true)}>
-          <Plus className="h-4 w-4" />
-          New Issue
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" asChild>
+            <Link href={`/${orgSlug}/projects/${projectKey}/settings/workflow-statuses`}>
+              <Settings2 className="h-4 w-4" />
+              Statuses
+            </Link>
+          </Button>
+          <Button data-icon="inline-start" onClick={() => setNewIssueOpen(true)}>
+            <Plus className="h-4 w-4" />
+            New Issue
+          </Button>
+        </div>
         <NewIssueModal
           open={newIssueOpen}
           onOpenChange={(open) => {
             setNewIssueOpen(open)
-            if (!open) setNewIssueInitialStatus(undefined)
+            if (!open) setNewIssueInitialWorkflowStatusId(undefined)
           }}
           orgSlug={orgSlug}
           initialProjectKey={projectKey}
           initialProjectName={project.name}
-          initialStatus={newIssueInitialStatus}
+          initialWorkflowStatusId={newIssueInitialWorkflowStatusId}
         />
       </div>
 
-      <div className="flex items-center gap-6 text-sm">
+      <div className="flex shrink-0 items-center gap-6 text-sm">
         <div className="flex items-center gap-1.5 text-muted-foreground">
           <FileText className="h-4 w-4" />
           <span>
@@ -169,8 +181,11 @@ export default function ProjectDetailPage({
         )}
       </div>
 
-      <Tabs defaultValue="issues" className="flex min-h-0 flex-1 flex-col mt-2">
-        <TabsList>
+      <Tabs
+        defaultValue="issues"
+        className="mt-2 flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden"
+      >
+        <TabsList className="shrink-0">
           <TabsTrigger value="issues" className="gap-2">
             <List className="h-4 w-4" />
             Issues
@@ -185,22 +200,32 @@ export default function ProjectDetailPage({
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="issues" className="mt-4 flex min-h-0 flex-1 flex-col">
+        <TabsContent
+          value="issues"
+          className="mt-4 flex min-h-0 flex-1 flex-col overflow-hidden data-[state=inactive]:hidden"
+        >
           <ProjectIssuesTab orgSlug={orgSlug} projectKey={projectKey} />
         </TabsContent>
 
-        <TabsContent value="board" className="mt-4 flex min-h-0 flex-1 flex-col">
+        <TabsContent
+          value="board"
+          className="mt-4 flex min-h-0 flex-1 flex-col overflow-hidden data-[state=inactive]:hidden"
+        >
           <ProjectKanbanBoard
             orgSlug={orgSlug}
             projectKey={projectKey}
+            projectId={project.id}
             onAddIssue={(columnId: string) => {
-              setNewIssueInitialStatus(columnId)
+              setNewIssueInitialWorkflowStatusId(columnId)
               setNewIssueOpen(true)
             }}
           />
         </TabsContent>
 
-        <TabsContent value="members" className="mt-4 flex min-h-0 flex-1 flex-col">
+        <TabsContent
+          value="members"
+          className="mt-4 flex min-h-0 flex-1 flex-col overflow-hidden data-[state=inactive]:hidden"
+        >
           <ProjectMembersTab orgSlug={orgSlug} projectKey={projectKey} />
         </TabsContent>
       </Tabs>
@@ -213,6 +238,10 @@ interface IssueListItem {
   display_key: string
   title: string
   status: string
+  workflow_status_id: string
+  status_name: string
+  status_category: string
+  is_blocked: boolean
 }
 
 interface IssuesResponse {
@@ -223,15 +252,12 @@ interface IssuesResponse {
   has_more: boolean
 }
 
-const statusConfig: Record<
-  string,
-  { label: string; icon: React.ElementType }
-> = {
-  backlog: { label: "Backlog", icon: HelpCircle },
-  todo: { label: "Todo", icon: Circle },
-  in_progress: { label: "In Progress", icon: Timer },
-  blocked: { label: "Blocked", icon: Ban },
-  done: { label: "Done", icon: CheckCircle },
+const categoryRowIcon: Record<string, React.ElementType> = {
+  backlog: HelpCircle,
+  unstarted: Circle,
+  started: Timer,
+  completed: CheckCircle,
+  canceled: XCircle,
 }
 
 const ROW_HEIGHT = 49
@@ -560,11 +586,8 @@ function ProjectIssuesTab({
                 )}
 
                 {visibleItems.map((issue) => {
-                  const status = statusConfig[issue.status] || {
-                    label: issue.status,
-                    icon: Circle,
-                  }
-                  const StatusIcon = status.icon
+                  const StatusIcon =
+                    categoryRowIcon[issue.status_category] ?? Circle
 
                   return (
                     <TableRow key={issue.issue_id} style={{ height: ROW_HEIGHT }}>
@@ -585,9 +608,15 @@ function ProjectIssuesTab({
                         </Link>
                       </TableCell>
                       <TableCell>
-                        <div className="flex items-center gap-2">
-                          <StatusIcon className="h-4 w-4 text-muted-foreground" />
-                          <span>{status.label}</span>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <StatusIcon className="h-4 w-4 shrink-0 text-muted-foreground" />
+                          <span>{issue.status_name}</span>
+                          {issue.is_blocked ? (
+                            <span className="inline-flex items-center gap-1 rounded bg-destructive/10 px-1.5 py-0.5 text-[10px] font-medium text-destructive">
+                              <Ban className="h-3 w-3" />
+                              Blocked
+                            </span>
+                          ) : null}
                         </div>
                       </TableCell>
                     </TableRow>

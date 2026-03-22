@@ -1,16 +1,21 @@
 use sqlx::{FromRow, PgPool, Postgres, QueryBuilder};
 
 use crate::modules::issues::models::{
-    ListMyIssuesQuery, MyIssueFacets, MyIssueSortBy, MyIssuesCursor, SortDirection,
+    ListMyIssuesQuery, MyIssueFacets, MyIssueSortBy, MyIssuesCursor, SortDirection, StatusFacetEntry,
 };
 
 #[derive(FromRow)]
 pub struct MyIssueRow {
     pub id: uuid::Uuid,
+    pub project_id: uuid::Uuid,
     pub project_key: String,
     pub key_seq: i32,
     pub title: String,
-    pub status: String,
+    pub workflow_status_id: uuid::Uuid,
+    pub status_slug: String,
+    pub status_name: String,
+    pub status_category: String,
+    pub is_blocked: bool,
     pub priority: String,
     pub created_at: chrono::DateTime<chrono::Utc>,
     pub updated_at: chrono::DateTime<chrono::Utc>,
@@ -44,7 +49,7 @@ pub fn cursor_from_row(sort_by: MyIssueSortBy, row: &MyIssueRow) -> MyIssuesCurs
         },
         MyIssueSortBy::Status => MyIssuesCursor {
             id: row.id,
-            sort_text: Some(row.status.clone()),
+            sort_text: Some(row.status_slug.clone()),
             sort_int: None,
             sort_timestamp: None,
         },
@@ -58,8 +63,17 @@ pub fn cursor_from_row(sort_by: MyIssueSortBy, row: &MyIssueRow) -> MyIssuesCurs
 }
 
 #[derive(FromRow)]
-struct FacetRow {
+struct FacetRowStr {
     value: String,
+    count: i64,
+}
+
+#[derive(FromRow)]
+struct StatusFacetRow {
+    workflow_status_id: uuid::Uuid,
+    name: String,
+    slug: String,
+    category: String,
     count: i64,
 }
 
@@ -70,14 +84,19 @@ fn apply_my_issues_filters(
 ) {
     if exclude_facet != Some("status") {
         if let Some(s) = query.status.as_deref() {
-            let values: Vec<&str> = s.split(',').map(str::trim).filter(|x| !x.is_empty()).collect();
+            let values: Vec<uuid::Uuid> = s
+                .split(',')
+                .map(str::trim)
+                .filter(|x| !x.is_empty())
+                .filter_map(|x| x.parse().ok())
+                .collect();
             if !values.is_empty() {
-                builder.push(" AND i.status IN (");
+                builder.push(" AND i.workflow_status_id IN (");
                 for (i, v) in values.iter().enumerate() {
                     if i > 0 {
                         builder.push(", ");
                     }
-                    builder.push_bind((*v).to_string());
+                    builder.push_bind(*v);
                 }
                 builder.push(")");
             }
@@ -98,6 +117,11 @@ fn apply_my_issues_filters(
                 builder.push(")");
             }
         }
+    }
+
+    if let Some(blocked) = query.blocked {
+        builder.push(" AND i.is_blocked = ");
+        builder.push_bind(blocked);
     }
 
     if let Some(search) = query.q.as_deref() {
@@ -215,18 +239,29 @@ pub async fn fetch_facets(
     let filter_type = query.filter_type.as_deref();
 
     let mut status_builder = QueryBuilder::<Postgres>::new(
-        "SELECT i.status as value, COUNT(*) as count FROM issues i WHERE ",
+        r#"SELECT pws.id as workflow_status_id, pws.name, pws.slug, pws.category, COUNT(*)::bigint as count
+           FROM issues i
+           JOIN projects p ON p.id = i.project_id
+           JOIN project_workflow_statuses pws ON pws.id = i.workflow_status_id
+           WHERE "#,
     );
     push_my_issues_user_filter(&mut status_builder, user_id, filter_type);
     apply_my_issues_filters(&mut status_builder, query, Some("status"));
-    status_builder.push(" GROUP BY i.status");
-    let rows: Vec<FacetRow> = status_builder
-        .build_query_as::<FacetRow>()
+    status_builder.push(" GROUP BY pws.id, pws.name, pws.slug, pws.category ORDER BY pws.category, pws.position");
+    let rows: Vec<StatusFacetRow> = status_builder
+        .build_query_as::<StatusFacetRow>()
         .fetch_all(pool)
         .await?;
-    for row in rows {
-        facets.status.insert(row.value, row.count);
-    }
+    facets.status = rows
+        .into_iter()
+        .map(|r| StatusFacetEntry {
+            workflow_status_id: r.workflow_status_id,
+            name: r.name,
+            slug: r.slug,
+            category: r.category,
+            count: r.count,
+        })
+        .collect();
 
     let mut priority_builder = QueryBuilder::<Postgres>::new(
         "SELECT i.priority as value, COUNT(*) as count FROM issues i WHERE ",
@@ -234,8 +269,8 @@ pub async fn fetch_facets(
     push_my_issues_user_filter(&mut priority_builder, user_id, filter_type);
     apply_my_issues_filters(&mut priority_builder, query, Some("priority"));
     priority_builder.push(" GROUP BY i.priority");
-    let rows: Vec<FacetRow> = priority_builder
-        .build_query_as::<FacetRow>()
+    let rows: Vec<FacetRowStr> = priority_builder
+        .build_query_as::<FacetRowStr>()
         .fetch_all(pool)
         .await?;
     for row in rows {
@@ -270,10 +305,13 @@ pub async fn fetch_item_rows(
 ) -> Result<Result<Vec<MyIssueRow>, &'static str>, sqlx::Error> {
     let filter_type = query.filter_type.as_deref();
     let mut items_query = QueryBuilder::<Postgres>::new(
-        "SELECT i.id, p.project_key, i.key_seq, i.title, i.status, i.priority, i.created_at, i.updated_at \
-         FROM issues i \
-         JOIN projects p ON p.id = i.project_id \
-         WHERE ",
+        r#"SELECT i.id, i.project_id, p.project_key, i.key_seq, i.title,
+                  i.workflow_status_id, pws.slug as status_slug, pws.name as status_name,
+                  pws.category as status_category, i.is_blocked, i.priority, i.created_at, i.updated_at
+           FROM issues i
+           JOIN projects p ON p.id = i.project_id
+           JOIN project_workflow_statuses pws ON pws.id = i.workflow_status_id
+           WHERE "#,
     );
     push_my_issues_user_filter(&mut items_query, user_id, filter_type);
     apply_my_issues_filters(&mut items_query, query, None);

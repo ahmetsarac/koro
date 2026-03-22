@@ -467,7 +467,7 @@ export const ImageUploadNode: React.FC<NodeViewProps> = (props) => {
 
         if (!deleteSuccess) return
 
-        if (imageType === "image" && urls.length === 1 && editor.commands.setImage) {
+        if (imageType === "image" && urls.length === 1) {
           const filename = files[0]?.name.replace(/\.[^/.]+$/, "") || "unknown"
           editor.chain().focus().setImage({
             src: urls[0],

@@ -145,6 +145,13 @@ pub async fn create_project(
                 AppError::BadRequest(None)
             })?;
 
+    crate::modules::issues::repository::insert_default_workflow_statuses_tx(&mut tx, project_id)
+        .await
+        .map_err(|e| {
+            tracing::error!(?e, "create_project workflow seed");
+            AppError::Internal
+        })?;
+
     projects_repo::insert_project_manager_tx(&mut tx, project_id, user_id)
         .await
         .map_err(|e| {

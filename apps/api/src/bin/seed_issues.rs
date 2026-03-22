@@ -5,7 +5,7 @@ use uuid::Uuid;
 
 const ISSUE_COUNT: i32 = 500;
 
-const STATUSES: [&str; 5] = ["backlog", "todo", "in_progress", "blocked", "done"];
+const WORKFLOW_SLUGS: [&str; 4] = ["backlog", "todo", "in_progress", "done"];
 const PRIORITIES: [&str; 4] = ["critical", "high", "medium", "low"];
 
 const TITLES: [&str; 20] = [
@@ -112,20 +112,31 @@ async fn main() -> anyhow::Result<()> {
             TITLES[i as usize % TITLES.len()],
             i + 1
         );
-        let status = STATUSES[i as usize % STATUSES.len()];
+        let slug = WORKFLOW_SLUGS[i as usize % WORKFLOW_SLUGS.len()];
+        let is_blocked = i % 23 == 0;
         let priority = PRIORITIES[i as usize % PRIORITIES.len()];
+
+        let workflow_status_id: Uuid = sqlx::query_scalar(
+            r#"SELECT id FROM project_workflow_statuses WHERE project_id = $1 AND slug = $2"#,
+        )
+        .bind(project_id)
+        .bind(slug)
+        .fetch_one(&mut *tx)
+        .await
+        .with_context(|| format!("resolve workflow slug {slug} for project"))?;
 
         sqlx::query(
             r#"
-            INSERT INTO issues (org_id, project_id, key_seq, title, status, priority, assignee_id, reporter_id)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $7)
+            INSERT INTO issues (org_id, project_id, key_seq, title, workflow_status_id, is_blocked, priority, assignee_id, reporter_id)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $8)
             "#,
         )
         .bind(org_id)
         .bind(project_id)
         .bind(next_seq)
         .bind(&title)
-        .bind(status)
+        .bind(workflow_status_id)
+        .bind(is_blocked)
         .bind(priority)
         .bind(user_id)
         .execute(&mut *tx)

@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import Link from "next/link"
-import { Plus } from "lucide-react"
+import { Ban, Plus } from "lucide-react"
 import {
   DndContext,
   DragOverlay,
@@ -29,10 +29,14 @@ export interface KanbanColumn {
   id: string
   label: string
   icon?: React.ElementType
+  /** When set (e.g. My Issues), only issues from this project may drop into this column. */
+  projectId?: string
 }
 
 export interface KanbanIssue {
   status: string
+  is_blocked?: boolean
+  project_id?: string
 }
 
 export interface IssueMoveParams<TIssue extends KanbanIssue> {
@@ -59,6 +63,8 @@ interface IssueKanbanBoardProps<TIssue extends KanbanIssue> {
   ) => Promise<boolean | void> | boolean | void
   onReload?: () => Promise<void> | void
   onAddIssue?: (columnId: string) => void
+  /** Used with `KanbanColumn.projectId` to block cross-project drops on My Issues. */
+  getIssueProjectId?: (issue: TIssue) => string | undefined
 }
 
 function normalizeColumns<TIssue extends KanbanIssue>(
@@ -98,6 +104,7 @@ export function IssueKanbanBoard<TIssue extends KanbanIssue>({
   onIssueMove,
   onReload,
   onAddIssue,
+  getIssueProjectId,
 }: IssueKanbanBoardProps<TIssue>) {
   const normalizedColumns = React.useMemo(
     () => normalizeColumns(columns, itemsByColumn),
@@ -177,6 +184,19 @@ export function IssueKanbanBoard<TIssue extends KanbanIssue>({
     }
 
     if (!activeColumn || !overColumn || activeColumn === overColumn) return
+
+    const activeIssueRow = currentColumns[activeColumn]?.find(
+      (item) => getIssueId(item) === activeId
+    )
+    const targetCol = columns.find((c) => c.id === overColumn)
+    if (
+      targetCol?.projectId &&
+      getIssueProjectId &&
+      activeIssueRow &&
+      getIssueProjectId(activeIssueRow) !== targetCol.projectId
+    ) {
+      return
+    }
 
     updateColumns((prev) => {
       const activeItems = [...prev[activeColumn]]
@@ -264,6 +284,16 @@ export function IssueKanbanBoard<TIssue extends KanbanIssue>({
     }
     if (!issue) return
 
+    const targetColMeta = columns.find((c) => c.id === toColumnId)
+    if (
+      targetColMeta?.projectId &&
+      getIssueProjectId &&
+      getIssueProjectId(issue) !== targetColMeta.projectId
+    ) {
+      resetColumns()
+      return
+    }
+
     const resolvedPosition = position >= 0 ? position : 0
 
     try {
@@ -288,23 +318,25 @@ export function IssueKanbanBoard<TIssue extends KanbanIssue>({
 
   if (isLoading) {
     return (
-      <div className="flex min-h-0 flex-1 gap-4 overflow-x-auto">
-        {columns.map((column) => (
-          <div
-            key={column.id}
-            className="flex w-72 shrink-0 flex-col rounded-lg border bg-muted/30"
-          >
-            <div className="flex items-center gap-2 border-b p-3">
-              <Skeleton className="h-4 w-4" />
-              <Skeleton className="h-4 w-20" />
+      <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+        <div className="flex min-h-0 flex-1 gap-4 overflow-x-auto overflow-y-hidden pb-2">
+          {columns.map((column) => (
+            <div
+              key={column.id}
+              className="flex h-full max-h-full min-h-0 w-72 shrink-0 flex-col rounded-lg border bg-muted/30"
+            >
+              <div className="flex shrink-0 items-center gap-2 border-b p-3">
+                <Skeleton className="h-4 w-4" />
+                <Skeleton className="h-4 w-20" />
+              </div>
+              <div className="min-h-0 flex-1 space-y-2 overflow-y-auto p-2">
+                {Array.from({ length: 3 }).map((_, index) => (
+                  <Skeleton key={index} className="h-20 w-full shrink-0" />
+                ))}
+              </div>
             </div>
-            <div className="flex-1 space-y-2 p-2">
-              {Array.from({ length: 3 }).map((_, index) => (
-                <Skeleton key={index} className="h-20 w-full" />
-              ))}
-            </div>
-          </div>
-        ))}
+          ))}
+        </div>
       </div>
     )
   }
@@ -325,23 +357,28 @@ export function IssueKanbanBoard<TIssue extends KanbanIssue>({
       onDragOver={handleDragOver}
       onDragEnd={handleDragEnd}
     >
-      <div className="flex min-h-0 flex-1 gap-4 overflow-x-auto pb-2">
-        {columns.map((column) => (
-          <BoardColumn
-            key={column.id}
-            id={column.id}
-            label={column.label}
-            icon={column.icon}
-            issues={localColumns[column.id] || []}
-            emptyMessage={emptyMessage}
-            getIssueId={getIssueId}
-            getIssueKey={getIssueKey}
-            getIssueTitle={getIssueTitle}
-            getIssueHref={getIssueHref}
-            onAddIssue={onAddIssue}
-            isInteractive={isInteractive}
-          />
-        ))}
+      <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+        <div className="flex min-h-0 flex-1 gap-4 overflow-x-auto overflow-y-hidden pb-2">
+          {columns.map((column) => (
+            <BoardColumn
+              key={column.id}
+              id={column.id}
+              label={column.label}
+              icon={column.icon}
+              columnProjectId={column.projectId}
+              activeDragIssue={activeIssue}
+              getIssueProjectId={getIssueProjectId}
+              issues={localColumns[column.id] || []}
+              emptyMessage={emptyMessage}
+              getIssueId={getIssueId}
+              getIssueKey={getIssueKey}
+              getIssueTitle={getIssueTitle}
+              getIssueHref={getIssueHref}
+              onAddIssue={onAddIssue}
+              isInteractive={isInteractive}
+            />
+          ))}
+        </div>
       </div>
 
       <DragOverlay>
@@ -364,6 +401,9 @@ interface BoardColumnProps<TIssue extends KanbanIssue> {
   id: string
   label: string
   icon?: React.ElementType
+  columnProjectId?: string
+  activeDragIssue: TIssue | null
+  getIssueProjectId?: (issue: TIssue) => string | undefined
   issues: TIssue[]
   emptyMessage: string
   getIssueId: (issue: TIssue) => string
@@ -378,6 +418,9 @@ function BoardColumn<TIssue extends KanbanIssue>({
   id,
   label,
   icon: ColumnIcon,
+  columnProjectId,
+  activeDragIssue,
+  getIssueProjectId,
   issues,
   emptyMessage,
   getIssueId,
@@ -388,11 +431,20 @@ function BoardColumn<TIssue extends KanbanIssue>({
   isInteractive,
 }: BoardColumnProps<TIssue>) {
   const issueIds = React.useMemo(() => issues.map(getIssueId), [issues, getIssueId])
-  const { setNodeRef: setDroppableRef, isOver } = useDroppable({ id })
+  const dropDisabled = Boolean(
+    columnProjectId &&
+      activeDragIssue &&
+      getIssueProjectId &&
+      getIssueProjectId(activeDragIssue) !== columnProjectId
+  )
+  const { setNodeRef: setDroppableRef, isOver } = useDroppable({
+    id,
+    disabled: dropDisabled,
+  })
 
   return (
-    <div className="flex w-72 shrink-0 flex-col rounded-lg border bg-muted/30">
-      <div className="flex items-center gap-2 rounded-t-lg border-b bg-background p-3">
+    <div className="flex h-full max-h-full min-h-0 w-72 shrink-0 flex-col rounded-lg border bg-muted/30">
+      <div className="flex shrink-0 items-center gap-2 rounded-t-lg border-b bg-background p-3">
         {ColumnIcon ? (
           <ColumnIcon className="h-4 w-4 text-muted-foreground" />
         ) : null}
@@ -407,7 +459,7 @@ function BoardColumn<TIssue extends KanbanIssue>({
       >
         <div
           ref={setDroppableRef}
-          className={`min-h-[100px] flex-1 space-y-2 overflow-y-auto p-2 ${isOver ? "rounded-md bg-muted/50" : ""}`}
+          className={`min-h-0 flex-1 space-y-2 overflow-y-auto p-2 ${isOver && !dropDisabled ? "rounded-md bg-muted/50" : ""} ${dropDisabled ? "opacity-40" : ""}`}
         >
           {issues.map((issue) => (
             <SortableBoardCard
@@ -429,7 +481,7 @@ function BoardColumn<TIssue extends KanbanIssue>({
         </div>
       </SortableContext>
 
-      <div className="p-2">
+      <div className="shrink-0 p-2">
         <button
           type="button"
           onClick={() => onAddIssue?.(id)}
@@ -504,6 +556,12 @@ function SortableBoardCard<TIssue extends KanbanIssue>({
           <p className="line-clamp-2 text-xs font-medium leading-tight">
             {getIssueTitle(issue)}
           </p>
+          {issue.is_blocked ? (
+            <span className="mt-1 inline-flex items-center gap-1 rounded bg-destructive/10 px-1.5 py-0.5 text-[10px] font-medium text-destructive">
+              <Ban className="h-3 w-3" />
+              Blocked
+            </span>
+          ) : null}
         </Link>
       ) : (
         <div className="space-y-1">
@@ -513,6 +571,12 @@ function SortableBoardCard<TIssue extends KanbanIssue>({
           <p className="line-clamp-2 text-xs font-medium leading-tight">
             {getIssueTitle(issue)}
           </p>
+          {issue.is_blocked ? (
+            <span className="mt-1 inline-flex items-center gap-1 rounded bg-destructive/10 px-1.5 py-0.5 text-[10px] font-medium text-destructive">
+              <Ban className="h-3 w-3" />
+              Blocked
+            </span>
+          ) : null}
         </div>
       )}
     </div>

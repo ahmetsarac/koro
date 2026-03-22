@@ -11,6 +11,7 @@ pub async fn project_key_by_id(
         .await
 }
 
+#[derive(sqlx::FromRow)]
 pub struct ProjectIdAndKey {
     pub id: Uuid,
     pub project_key: String,
@@ -21,101 +22,103 @@ pub async fn find_project_by_org_slug_and_key(
     org_slug: &str,
     project_key: &str,
 ) -> Result<Option<ProjectIdAndKey>, sqlx::Error> {
-    let row = sqlx::query!(
+    let row = sqlx::query_as::<_, ProjectIdAndKey>(
         r#"
         SELECT p.id, p.project_key
         FROM projects p
         JOIN organizations o ON o.id = p.org_id
         WHERE o.slug = $1 AND p.project_key = $2
         "#,
-        org_slug,
-        project_key
     )
+    .bind(org_slug)
+    .bind(project_key)
     .fetch_optional(pool)
     .await?;
-    Ok(row.map(|r| ProjectIdAndKey {
-        id: r.id,
-        project_key: r.project_key,
-    }))
+    Ok(row)
+}
+
+#[derive(sqlx::FromRow)]
+pub struct IssueSummaryRow {
+    pub id: Uuid,
+    pub key_seq: i32,
+    pub title: String,
+    pub workflow_status_id: Uuid,
+    pub status_slug: String,
+    pub status_name: String,
+    pub status_category: String,
+    pub is_blocked: bool,
 }
 
 pub async fn list_issue_summaries_for_project(
     pool: &PgPool,
     project_id: Uuid,
-    status_filter: Option<String>,
+    workflow_status_filter: Option<Uuid>,
     assignee_filter: Option<Uuid>,
     q_filter: Option<String>,
     limit: i64,
     offset: i64,
 ) -> Result<Vec<IssueSummaryRow>, sqlx::Error> {
-    let rows = sqlx::query!(
+    sqlx::query_as::<_, IssueSummaryRow>(
         r#"
-        SELECT id, key_seq, title, status
-        FROM issues
-        WHERE project_id = $1
-            AND ($2::text IS NULL OR status = $2)
-            AND ($3::uuid IS NULL OR assignee_id = $3)
+        SELECT
+            i.id,
+            i.key_seq,
+            i.title,
+            i.workflow_status_id,
+            pws.slug AS status_slug,
+            pws.name AS status_name,
+            pws.category AS status_category,
+            i.is_blocked
+        FROM issues i
+        JOIN project_workflow_statuses pws ON pws.id = i.workflow_status_id
+        WHERE i.project_id = $1
+            AND ($2::uuid IS NULL OR i.workflow_status_id = $2)
+            AND ($3::uuid IS NULL OR i.assignee_id = $3)
             AND (
                 $4::text IS NULL
-                OR title ILIKE '%' || $4 || '%'
-                OR COALESCE(description, '') ILIKE '%' || $4 || '%'
+                OR i.title ILIKE '%' || $4 || '%'
+                OR COALESCE(i.description, '') ILIKE '%' || $4 || '%'
             )
-        ORDER BY key_seq DESC
+        ORDER BY i.key_seq DESC
         LIMIT $5
         OFFSET $6
         "#,
-        project_id,
-        status_filter,
-        assignee_filter,
-        q_filter,
-        limit,
-        offset
     )
+    .bind(project_id)
+    .bind(workflow_status_filter)
+    .bind(assignee_filter)
+    .bind(q_filter)
+    .bind(limit)
+    .bind(offset)
     .fetch_all(pool)
-    .await?;
-    Ok(rows
-        .into_iter()
-        .map(|r| IssueSummaryRow {
-            id: r.id,
-            key_seq: r.key_seq,
-            title: r.title,
-            status: r.status,
-        })
-        .collect())
-}
-
-pub struct IssueSummaryRow {
-    pub id: Uuid,
-    pub key_seq: i32,
-    pub title: String,
-    pub status: String,
+    .await
 }
 
 pub async fn count_issues_for_project_filtered(
     pool: &PgPool,
     project_id: Uuid,
-    status_filter: Option<String>,
+    workflow_status_filter: Option<Uuid>,
     assignee_filter: Option<Uuid>,
     q_filter: Option<String>,
 ) -> Result<i64, sqlx::Error> {
-    let c = sqlx::query_scalar!(
+    let c: i64 = sqlx::query_scalar(
         r#"
-        SELECT COUNT(*) as "count!"
-        FROM issues
-        WHERE project_id = $1
-            AND ($2::text IS NULL OR status = $2)
-            AND ($3::uuid IS NULL OR assignee_id = $3)
+        SELECT COUNT(*)::bigint
+        FROM issues i
+        WHERE i.project_id = $1
+            AND ($2::uuid IS NULL OR i.workflow_status_id = $2)
+            AND ($3::uuid IS NULL OR i.assignee_id = $3)
             AND (
                 $4::text IS NULL
-                OR title ILIKE '%' || $4 || '%'
-                OR COALESCE(description, '') ILIKE '%' || $4 || '%'
+                OR i.title ILIKE '%' || $4 || '%'
+                OR COALESCE(i.description, '') ILIKE '%' || $4 || '%'
             )
         "#,
-        project_id,
-        status_filter,
-        assignee_filter,
-        q_filter
     )
+    .bind(project_id)
+    .bind(workflow_status_filter)
+    .bind(assignee_filter)
+    .bind(q_filter)
     .fetch_one(pool)
     .await?;
     Ok(c)
@@ -125,50 +128,50 @@ pub async fn list_board_issues_by_key_seq(
     pool: &PgPool,
     project_id: Uuid,
 ) -> Result<Vec<IssueSummaryRow>, sqlx::Error> {
-    let rows = sqlx::query!(
+    sqlx::query_as::<_, IssueSummaryRow>(
         r#"
-        SELECT id, key_seq, title, status
-        FROM issues
-        WHERE project_id = $1
-        ORDER BY key_seq DESC
+        SELECT
+            i.id,
+            i.key_seq,
+            i.title,
+            i.workflow_status_id,
+            pws.slug AS status_slug,
+            pws.name AS status_name,
+            pws.category AS status_category,
+            i.is_blocked
+        FROM issues i
+        JOIN project_workflow_statuses pws ON pws.id = i.workflow_status_id
+        WHERE i.project_id = $1
+        ORDER BY i.key_seq DESC
         "#,
-        project_id
     )
+    .bind(project_id)
     .fetch_all(pool)
-    .await?;
-    Ok(rows
-        .into_iter()
-        .map(|r| IssueSummaryRow {
-            id: r.id,
-            key_seq: r.key_seq,
-            title: r.title,
-            status: r.status,
-        })
-        .collect())
+    .await
 }
 
 pub async fn list_board_issues_by_board_order(
     pool: &PgPool,
     project_id: Uuid,
 ) -> Result<Vec<IssueSummaryRow>, sqlx::Error> {
-    let rows = sqlx::query!(
+    sqlx::query_as::<_, IssueSummaryRow>(
         r#"
-        SELECT id, key_seq, title, status
-        FROM issues
-        WHERE project_id = $1
-        ORDER BY board_order ASC, key_seq DESC
+        SELECT
+            i.id,
+            i.key_seq,
+            i.title,
+            i.workflow_status_id,
+            pws.slug AS status_slug,
+            pws.name AS status_name,
+            pws.category AS status_category,
+            i.is_blocked
+        FROM issues i
+        JOIN project_workflow_statuses pws ON pws.id = i.workflow_status_id
+        WHERE i.project_id = $1
+        ORDER BY i.board_order ASC, i.key_seq DESC
         "#,
-        project_id
     )
+    .bind(project_id)
     .fetch_all(pool)
-    .await?;
-    Ok(rows
-        .into_iter()
-        .map(|r| IssueSummaryRow {
-            id: r.id,
-            key_seq: r.key_seq,
-            title: r.title,
-            status: r.status,
-        })
-        .collect())
+    .await
 }

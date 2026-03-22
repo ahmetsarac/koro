@@ -107,6 +107,10 @@ pub async fn health(State(state): State<AppState>) -> impl IntoResponse {
         issues_handlers::update_issue,
         issues_handlers::get_board,
         issues_handlers::get_board_by_key,
+        issues_handlers::list_workflow_statuses,
+        issues_handlers::create_workflow_status,
+        issues_handlers::patch_workflow_status,
+        issues_handlers::delete_workflow_status,
         issues_handlers::update_issue_board_position,
         issues_handlers::get_issue,
         issues_handlers::get_issue_by_key,
@@ -162,9 +166,16 @@ pub async fn health(State(state): State<AppState>) -> impl IntoResponse {
         crate::modules::issues::models::UpdateIssueStatusResponse,
         crate::modules::issues::models::UpdateIssueRequest,
         crate::modules::issues::models::UpdateIssueResponse,
+        crate::modules::issues::models::BoardColumnDef,
         crate::modules::issues::models::BoardResponse,
+        crate::modules::issues::models::CreateWorkflowStatusRequest,
+        crate::modules::issues::models::DeleteWorkflowStatusQuery,
+        crate::modules::issues::models::ListWorkflowStatusesResponse,
+        crate::modules::issues::models::PatchWorkflowStatusRequest,
         crate::modules::issues::models::UpdateIssueBoardPositionRequest,
         crate::modules::issues::models::UpdateIssueBoardPositionResponse,
+        crate::modules::issues::models::WorkflowStatusItem,
+        crate::modules::issues::models::WorkflowStatusesByCategory,
         crate::modules::issues::models::IssueDetailResponse,
         crate::modules::issues::models::AssignIssueRequest,
         crate::modules::comments::models::CreateCommentRequest,
@@ -240,6 +251,14 @@ pub fn router(state: AppState) -> Router {
         .route(
             "/orgs/{orgSlug}/projects/{projectKey}/board",
             get(issues_handlers::get_board_by_key),
+        )
+        .route(
+            "/orgs/{orgSlug}/projects/{projectKey}/workflow-statuses",
+            get(issues_handlers::list_workflow_statuses).post(issues_handlers::create_workflow_status),
+        )
+        .route(
+            "/orgs/{orgSlug}/projects/{projectKey}/workflow-statuses/{statusId}",
+            patch(issues_handlers::patch_workflow_status).delete(issues_handlers::delete_workflow_status),
         )
         .route(
             "/issues/{issueId}/status",

@@ -22,6 +22,8 @@ export type FetchMyIssuesParams = {
   q?: string
   status?: string | string[]
   priority?: string | string[]
+  /** `true` / `false` string sent as query param */
+  blocked?: boolean
   sort_by?: IssueSortBy
   sort_dir?: IssueSortDir
   filter_type?: IssueFilterType

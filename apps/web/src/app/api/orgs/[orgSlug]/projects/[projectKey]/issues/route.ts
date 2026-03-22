@@ -79,7 +79,9 @@ export async function POST(
     const body = await request.json() as {
       title: string
       description?: string
-      status?: string
+      workflow_status_id?: string
+      workflow_status_slug?: string
+      is_blocked?: boolean
       priority?: string
       assignee_id?: string | null
     }
@@ -92,7 +94,9 @@ export async function POST(
         body: JSON.stringify({
           title: body.title,
           description: body.description ?? null,
-          status: body.status ?? "backlog",
+          workflow_status_id: body.workflow_status_id ?? null,
+          workflow_status_slug: body.workflow_status_slug ?? null,
+          is_blocked: body.is_blocked ?? null,
           priority: body.priority ?? "medium",
           assignee_id: body.assignee_id ?? null,
         }),

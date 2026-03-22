@@ -1,5 +1,6 @@
 "use client"
 
+import * as React from "react"
 import { type Table } from "@tanstack/react-table"
 import { LayoutGrid, List, PlusIcon, X } from "lucide-react"
 
@@ -9,7 +10,7 @@ import { cn } from "@/lib/utils"
 import { DataTableViewOptions } from "./data-table-view-options"
 import { useNewIssueModal } from "@/components/issues/new-issue-modal-context"
 
-import { priorities, statuses } from "../data/data"
+import { priorities, iconForIssueCategory } from "../data/data"
 import { type IssueFacets } from "../data/schema"
 import { DataTableFacetedFilter } from "./data-table-faceted-filter"
 
@@ -18,6 +19,8 @@ interface DataTableToolbarProps<TData> {
   facets?: IssueFacets | null
   view: "list" | "board"
   onViewChange: (view: "list" | "board") => void
+  blockedFilter?: boolean | undefined
+  onBlockedFilterChange?: (value: boolean | undefined) => void
 }
 
 export function DataTableToolbar<TData>({
@@ -25,13 +28,32 @@ export function DataTableToolbar<TData>({
   facets = null,
   view,
   onViewChange,
+  blockedFilter,
+  onBlockedFilterChange,
 }: DataTableToolbarProps<TData>) {
-  const isFiltered = table.getState().columnFilters.length > 0
+  const isFiltered =
+    table.getState().columnFilters.length > 0 || blockedFilter !== undefined
   const newIssueModal = useNewIssueModal()
+
+  const statusFilterOptions = React.useMemo(() => {
+    if (!facets?.status?.length) return []
+    return facets.status.map((s) => ({
+      value: s.workflow_status_id,
+      label: s.name,
+      icon: iconForIssueCategory(s.category),
+    }))
+  }, [facets])
+
+  const statusFacetCounts = React.useMemo(() => {
+    if (!facets?.status?.length) return undefined
+    return Object.fromEntries(
+      facets.status.map((s) => [s.workflow_status_id, s.count])
+    )
+  }, [facets])
 
   return (
     <div className="flex items-center justify-between">
-      <div className="flex flex-1 items-center gap-2">
+      <div className="flex flex-1 flex-wrap items-center gap-2">
         <Input
           placeholder="Filter issues..."
           value={(table.getColumn("title")?.getFilterValue() as string) ?? ""}
@@ -40,13 +62,56 @@ export function DataTableToolbar<TData>({
           }
           className="h-8 w-[150px] lg:w-[250px]"
         />
-        {table.getColumn("status") && (
+        {table.getColumn("status") && statusFilterOptions.length > 0 && (
           <DataTableFacetedFilter
             column={table.getColumn("status")}
             title="Status"
-            options={statuses}
-            facetCounts={facets?.status}
+            options={statusFilterOptions}
+            facetCounts={statusFacetCounts}
           />
+        )}
+        {onBlockedFilterChange && (
+          <div className="inline-flex items-center rounded-md border bg-background p-0.5">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className={cn(
+                "h-7 px-2 text-xs",
+                blockedFilter === undefined &&
+                  "bg-muted text-foreground hover:bg-muted"
+              )}
+              onClick={() => onBlockedFilterChange(undefined)}
+            >
+              All
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className={cn(
+                "h-7 px-2 text-xs",
+                blockedFilter === true &&
+                  "bg-muted text-foreground hover:bg-muted"
+              )}
+              onClick={() => onBlockedFilterChange(true)}
+            >
+              Blocked
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className={cn(
+                "h-7 px-2 text-xs",
+                blockedFilter === false &&
+                  "bg-muted text-foreground hover:bg-muted"
+              )}
+              onClick={() => onBlockedFilterChange(false)}
+            >
+              Not blocked
+            </Button>
+          </div>
         )}
         {table.getColumn("priority") && (
           <DataTableFacetedFilter
@@ -60,7 +125,10 @@ export function DataTableToolbar<TData>({
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => table.resetColumnFilters()}
+            onClick={() => {
+              table.resetColumnFilters()
+              onBlockedFilterChange?.(undefined)
+            }}
           >
             Reset
             <X />

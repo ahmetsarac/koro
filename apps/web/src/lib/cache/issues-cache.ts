@@ -62,6 +62,10 @@ export function updateIssueInCaches(
     title?: string
     description?: string
     status?: string
+    workflow_status_id?: string
+    status_name?: string
+    status_category?: string
+    is_blocked?: boolean
     priority?: string
     assignee_id?: string | null
     assignee_name?: string | null
@@ -74,6 +78,10 @@ export function updateIssueInCaches(
       title?: string
       description?: string
       status?: string
+      workflow_status_id?: string
+      status_name?: string
+      status_category?: string
+      is_blocked?: boolean
       priority?: string
       assignee_id?: string | null
       assignee_name?: string | null
@@ -93,6 +101,10 @@ export function updateIssueInCaches(
       title?: string
       description?: string
       status?: string
+      workflow_status_id?: string
+      status_name?: string
+      status_category?: string
+      is_blocked?: boolean
       priority?: string
       assignee_id?: string | null
       assignee_name?: string | null

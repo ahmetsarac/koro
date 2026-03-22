@@ -6,7 +6,8 @@ use crate::modules::{auth::user::AuthUser, core::state::AppState};
 
 use super::{
     models::{
-        AssignIssueRequest, CreateIssueRequest, ListIssuesQuery, ListMyIssuesQuery,
+        AssignIssueRequest, CreateIssueRequest, CreateWorkflowStatusRequest, DeleteWorkflowStatusQuery,
+        ListIssuesQuery, ListMyIssuesQuery, PatchWorkflowStatusRequest,
         UpdateIssueBoardPositionRequest, UpdateIssueRequest, UpdateIssueStatusRequest,
     },
     service,
@@ -355,4 +356,93 @@ pub async fn unassign_issue(
     AuthUser(actor_id): AuthUser,
 ) -> impl axum::response::IntoResponse {
     service::unassign_issue(&state.db, org_slug, issue_key, actor_id).await
+}
+
+#[utoipa::path(
+    get,
+    path = "/orgs/{orgSlug}/projects/{projectKey}/workflow-statuses",
+    tag = "issues",
+    security(("bearer_auth" = [])),
+    params(
+        ("orgSlug" = String, Path),
+        ("projectKey" = String, Path),
+    ),
+    responses(
+        (status = 200, description = "Grouped workflow statuses", body = super::models::ListWorkflowStatusesResponse),
+        (status = 403, description = "Forbidden"),
+        (status = 404, description = "Not found"),
+    )
+)]
+pub async fn list_workflow_statuses(
+    Path((org_slug, project_key)): Path<(String, String)>,
+    State(state): State<AppState>,
+    AuthUser(user_id): AuthUser,
+) -> impl axum::response::IntoResponse {
+    service::list_workflow_statuses(&state.db, org_slug, project_key, user_id).await
+}
+
+#[utoipa::path(
+    post,
+    path = "/orgs/{orgSlug}/projects/{projectKey}/workflow-statuses",
+    tag = "issues",
+    security(("bearer_auth" = [])),
+    request_body = CreateWorkflowStatusRequest,
+    responses(
+        (status = 201, description = "Created", body = super::models::WorkflowStatusItem),
+        (status = 400, description = "Bad request"),
+        (status = 403, description = "Forbidden"),
+        (status = 404, description = "Not found"),
+    )
+)]
+pub async fn create_workflow_status(
+    Path((org_slug, project_key)): Path<(String, String)>,
+    State(state): State<AppState>,
+    AuthUser(user_id): AuthUser,
+    Json(req): Json<CreateWorkflowStatusRequest>,
+) -> impl axum::response::IntoResponse {
+    service::create_workflow_status(&state.db, org_slug, project_key, user_id, req).await
+}
+
+#[utoipa::path(
+    patch,
+    path = "/orgs/{orgSlug}/projects/{projectKey}/workflow-statuses/{statusId}",
+    tag = "issues",
+    security(("bearer_auth" = [])),
+    request_body = PatchWorkflowStatusRequest,
+    responses(
+        (status = 200, description = "Updated", body = super::models::WorkflowStatusItem),
+        (status = 400, description = "Bad request"),
+        (status = 403, description = "Forbidden"),
+        (status = 404, description = "Not found"),
+    )
+)]
+pub async fn patch_workflow_status(
+    Path((org_slug, project_key, status_id)): Path<(String, String, uuid::Uuid)>,
+    State(state): State<AppState>,
+    AuthUser(user_id): AuthUser,
+    Json(req): Json<PatchWorkflowStatusRequest>,
+) -> impl axum::response::IntoResponse {
+    service::patch_workflow_status(&state.db, org_slug, project_key, status_id, user_id, req).await
+}
+
+#[utoipa::path(
+    delete,
+    path = "/orgs/{orgSlug}/projects/{projectKey}/workflow-statuses/{statusId}",
+    tag = "issues",
+    security(("bearer_auth" = [])),
+    params(DeleteWorkflowStatusQuery),
+    responses(
+        (status = 204, description = "Deleted"),
+        (status = 400, description = "Bad request"),
+        (status = 403, description = "Forbidden"),
+        (status = 404, description = "Not found"),
+    )
+)]
+pub async fn delete_workflow_status(
+    Path((org_slug, project_key, status_id)): Path<(String, String, uuid::Uuid)>,
+    State(state): State<AppState>,
+    AuthUser(user_id): AuthUser,
+    Query(q): Query<DeleteWorkflowStatusQuery>,
+) -> impl axum::response::IntoResponse {
+    service::delete_workflow_status(&state.db, org_slug, project_key, status_id, user_id, q).await
 }

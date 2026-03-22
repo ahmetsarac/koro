@@ -31,7 +31,7 @@ import {
 } from "@/lib/my-issues"
 
 import { type IssueFacets, type Issue } from "../data/schema"
-import { statuses } from "../data/data"
+import { iconForIssueCategory } from "../data/data"
 import { useMyIssuesInitialView } from "./my-issues-view-context"
 import { DataTableSelectionOverlay } from "./data-table-selection-overlay"
 import { MY_ISSUES_VIEW_COOKIE } from "../constants"
@@ -93,12 +93,17 @@ function buildFetchParams(
   sorting: SortingState,
   columnFilters: ColumnFiltersState,
   cursor: string | null,
-  filterType: IssueFilterType
+  filterType: IssueFilterType,
+  blocked?: boolean
 ): FetchMyIssuesParams {
   const params: FetchMyIssuesParams = {
     limit: PAGE_SIZE,
     filter_type: filterType,
     ...(cursor ? { cursor } : { offset: 0 }),
+  }
+
+  if (blocked !== undefined) {
+    params.blocked = blocked
   }
 
   const sort = sorting[0]
@@ -122,16 +127,31 @@ function buildFetchParams(
   return params
 }
 
+const WORKFLOW_CATEGORY_ORDER = [
+  "backlog",
+  "unstarted",
+  "started",
+  "completed",
+  "canceled",
+] as const
+
+function categoryRank(category: string): number {
+  const i = WORKFLOW_CATEGORY_ORDER.indexOf(
+    category as (typeof WORKFLOW_CATEGORY_ORDER)[number]
+  )
+  return i === -1 ? 99 : i
+}
+
 async function updateIssueBoardPosition(
   issueId: string,
-  status: string,
+  workflow_status_id: string,
   position: number
 ): Promise<boolean> {
   const response = await fetch(`/api/issues/${issueId}/board-position`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     credentials: "same-origin",
-    body: JSON.stringify({ status, position }),
+    body: JSON.stringify({ workflow_status_id, position }),
   })
 
   return response.ok
@@ -165,6 +185,9 @@ export function DataTable({ orgSlug, columns, filterType }: DataTableProps) {
   const [containerHeight, setContainerHeight] = React.useState(0)
   const [listBodyOverflows, setListBodyOverflows] = React.useState(false)
   const [facets, setFacets] = React.useState<IssueFacets | null>(null)
+  const [blockedFilter, setBlockedFilter] = React.useState<boolean | undefined>(
+    undefined
+  )
   const [view, setViewState] = React.useState<"list" | "board">(initialView)
   const setView = React.useCallback((next: "list" | "board") => {
     setViewState(next)
@@ -268,7 +291,13 @@ export function DataTable({ orgSlug, columns, filterType }: DataTableProps) {
     try {
       setIsFetchingMore(true)
 
-      const params = buildFetchParams(sorting, columnFilters, nextCursor, filterType)
+      const params = buildFetchParams(
+        sorting,
+        columnFilters,
+        nextCursor,
+        filterType,
+        blockedFilter
+      )
       const res = await fetchMyIssues(params)
 
       setItems((prev) => [...prev, ...res.items])
@@ -280,7 +309,15 @@ export function DataTable({ orgSlug, columns, filterType }: DataTableProps) {
     } finally {
       setIsFetchingMore(false)
     }
-  }, [nextCursor, hasMore, isFetchingMore, sorting, columnFilters, filterType])
+  }, [
+    nextCursor,
+    hasMore,
+    isFetchingMore,
+    sorting,
+    columnFilters,
+    filterType,
+    blockedFilter,
+  ])
 
   // Board görünümünde tüm veriyi yükle (liste pagination ile devam eder)
   React.useEffect(() => {
@@ -306,17 +343,20 @@ export function DataTable({ orgSlug, columns, filterType }: DataTableProps) {
     getFacetedUniqueValues: getFacetedUniqueValues(),
   })
 
-  // Sort/filter değişince cache temizle, scroll başa al ve yeniden yükle
+  // Sort/filter/blocked değişince cache temizle, scroll başa al ve yeniden yükle
   const prevSortingRef = React.useRef(sorting)
   const prevFiltersRef = React.useRef(columnFilters)
+  const prevBlockedRef = React.useRef(blockedFilter)
 
   React.useEffect(() => {
     const sortingChanged = JSON.stringify(prevSortingRef.current) !== JSON.stringify(sorting)
     const filtersChanged = JSON.stringify(prevFiltersRef.current) !== JSON.stringify(columnFilters)
+    const blockedChanged = prevBlockedRef.current !== blockedFilter
 
-    if (sortingChanged || filtersChanged) {
+    if (sortingChanged || filtersChanged || blockedChanged) {
       prevSortingRef.current = sorting
       prevFiltersRef.current = columnFilters
+      prevBlockedRef.current = blockedFilter
 
       clearScrollState(filterType)
       scrollContainerRef.current?.scrollTo({ top: 0 })
@@ -334,7 +374,13 @@ export function DataTable({ orgSlug, columns, filterType }: DataTableProps) {
           setIsInitialLoading(true)
           setError(null)
 
-          const params = buildFetchParams(sorting, columnFilters, null, filterType)
+          const params = buildFetchParams(
+            sorting,
+            columnFilters,
+            null,
+            filterType,
+            blockedFilter
+          )
           const res = await fetchMyIssues(params)
 
           if (cancelled) return
@@ -358,37 +404,56 @@ export function DataTable({ orgSlug, columns, filterType }: DataTableProps) {
         cancelled = true
       }
     }
-  }, [sorting, columnFilters, filterType])
+  }, [sorting, columnFilters, filterType, blockedFilter])
 
   const rows = table.getRowModel().rows
   const selectedCount = table.getSelectedRowModel().rows.length
   const visibleColumnCount =
     table.getVisibleLeafColumns().length || columns.length
-  const boardColumns = React.useMemo(
-    () =>
-      statuses.map((status) => ({
-        id: status.value,
-        label: status.label,
-        icon: status.icon,
-      })),
-    []
-  )
-  const boardItems = React.useMemo(() => {
-    const grouped = boardColumns.reduce<Record<string, Issue[]>>((acc, column) => {
-      acc[column.id] = []
-      return acc
-    }, {})
-
-    for (const item of rows.map((row) => row.original)) {
-      if (!grouped[item.status]) {
-        grouped[item.status] = []
-      }
-
-      grouped[item.status].push(item)
+  const { boardColumns, boardItems, statusMetaByWorkflowId } = React.useMemo(() => {
+    type StatusMeta = {
+      workflow_status_id: string
+      status_name: string
+      status_category: string
+      status_slug: string
+      project_id: string
     }
-
-    return grouped
-  }, [boardColumns, rows])
+    const byId = new Map<string, StatusMeta>()
+    for (const row of rows) {
+      const it = row.original
+      if (!byId.has(it.workflow_status_id)) {
+        byId.set(it.workflow_status_id, {
+          workflow_status_id: it.workflow_status_id,
+          status_name: it.status_name,
+          status_category: it.status_category,
+          status_slug: it.status,
+          project_id: it.project_id,
+        })
+      }
+    }
+    const sorted = [...byId.values()].sort((a, b) => {
+      const rc = categoryRank(a.status_category) - categoryRank(b.status_category)
+      if (rc !== 0) return rc
+      return a.status_name.localeCompare(b.status_name)
+    })
+    const cols = sorted.map((m) => ({
+      id: m.workflow_status_id,
+      label: m.status_name,
+      icon: iconForIssueCategory(m.status_category),
+      projectId: m.project_id,
+    }))
+    const grouped: Record<string, Issue[]> = {}
+    for (const c of cols) {
+      grouped[c.id] = []
+    }
+    for (const row of rows) {
+      const it = row.original
+      const k = it.workflow_status_id
+      if (!grouped[k]) grouped[k] = []
+      grouped[k].push(it)
+    }
+    return { boardColumns: cols, boardItems: grouped, statusMetaByWorkflowId: byId }
+  }, [rows])
 
   const visibleCount =
     containerHeight > 0 ? Math.ceil(containerHeight / ROW_HEIGHT) : 12
@@ -465,7 +530,13 @@ export function DataTable({ orgSlug, columns, filterType }: DataTableProps) {
 
   const refetchIssues = React.useCallback(async () => {
     try {
-      const params = buildFetchParams(sorting, columnFilters, null, filterType)
+      const params = buildFetchParams(
+        sorting,
+        columnFilters,
+        null,
+        filterType,
+        blockedFilter
+      )
       const res = await fetchMyIssues(params)
       setItems(res.items)
       setTotal(res.total)
@@ -475,7 +546,7 @@ export function DataTable({ orgSlug, columns, filterType }: DataTableProps) {
     } catch {
       // keep current state on refetch error
     }
-  }, [sorting, columnFilters, filterType])
+  }, [sorting, columnFilters, filterType, blockedFilter])
 
   const handleBoardMove = React.useCallback(
     async ({
@@ -495,13 +566,29 @@ export function DataTable({ orgSlug, columns, filterType }: DataTableProps) {
         return true
       }
 
-      const previousStatus = issue.status
+      const targetMeta = statusMetaByWorkflowId.get(toColumnId)
+      const previousSnapshot = {
+        workflow_status_id: issue.workflow_status_id,
+        status_name: issue.status_name,
+        status_category: issue.status_category,
+        status: issue.status,
+      }
 
-      setItems((prev) =>
-        prev.map((item) =>
-          item.id === issueId ? { ...item, status: toColumnId } : item
+      if (targetMeta) {
+        setItems((prev) =>
+          prev.map((item) =>
+            item.id === issueId
+              ? {
+                  ...item,
+                  workflow_status_id: toColumnId,
+                  status_name: targetMeta.status_name,
+                  status_category: targetMeta.status_category,
+                  status: targetMeta.status_slug,
+                }
+              : item
+          )
         )
-      )
+      }
 
       try {
         const success = await updateIssueBoardPosition(
@@ -513,24 +600,30 @@ export function DataTable({ orgSlug, columns, filterType }: DataTableProps) {
         if (!success) {
           setItems((prev) =>
             prev.map((item) =>
-              item.id === issueId ? { ...item, status: previousStatus } : item
+              item.id === issueId ? { ...item, ...previousSnapshot } : item
             )
           )
           return false
         }
 
-        updateIssueInCaches(issue.display_key, { status: toColumnId })
+        updateIssueInCaches(issue.display_key, {
+          workflow_status_id: toColumnId,
+          status_name: targetMeta?.status_name,
+          status_category: targetMeta?.status_category,
+          status: targetMeta?.status_slug,
+        })
+        await refetchIssues()
         return true
       } catch {
         setItems((prev) =>
           prev.map((item) =>
-            item.id === issueId ? { ...item, status: previousStatus } : item
+            item.id === issueId ? { ...item, ...previousSnapshot } : item
           )
         )
         return false
       }
     },
-    []
+    [refetchIssues, statusMetaByWorkflowId]
   )
 
   return (
@@ -540,6 +633,8 @@ export function DataTable({ orgSlug, columns, filterType }: DataTableProps) {
         facets={facets}
         view={view}
         onViewChange={setView}
+        blockedFilter={blockedFilter}
+        onBlockedFilterChange={setBlockedFilter}
       />
 
       <div className="relative flex max-h-full min-h-0 flex-1 flex-col overflow-hidden">
@@ -669,7 +764,7 @@ export function DataTable({ orgSlug, columns, filterType }: DataTableProps) {
             </div>
           </>
         ) : (
-          <div className="flex min-h-0 min-w-0 flex-1">
+          <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
             <IssueKanbanBoard
               columns={boardColumns}
               itemsByColumn={boardItems}
@@ -680,8 +775,15 @@ export function DataTable({ orgSlug, columns, filterType }: DataTableProps) {
               getIssueKey={(issue) => issue.display_key}
               getIssueTitle={(issue) => issue.title}
               getIssueHref={(issue) => `/${orgSlug}/issue/${issue.display_key}`}
+              getIssueProjectId={(issue) => issue.project_id}
               onIssueMove={({ issue, issueId, fromColumnId, toColumnId, position }) =>
-                handleBoardMove({ issue, issueId, fromColumnId, toColumnId, position })
+                handleBoardMove({
+                  issue,
+                  issueId,
+                  fromColumnId,
+                  toColumnId,
+                  position,
+                })
               }
               onReload={refetchIssues}
               onAddIssue={(columnId) => newIssueModal?.openNewIssueModal(columnId)}

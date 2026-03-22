@@ -9,12 +9,15 @@ use crate::modules::{
 
 use super::{
     models::{
-        parse_issue_key, AssignIssueRequest, BoardResponse, CreateIssueRequest,
-        CreateIssueResponse, IssueDetailResponse, IssueListItem, ListIssuesResponse,
-        ListIssuesQuery, ListMyIssuesQuery, ListMyIssuesResponse, ListProjectIssuesResponse,
-        MyIssueItem, MyIssuesCursor, UpdateIssueBoardPositionRequest,
-        UpdateIssueBoardPositionResponse, UpdateIssueRequest,
-        UpdateIssueResponse, UpdateIssueStatusRequest, UpdateIssueStatusResponse,
+        parse_issue_key, AssignIssueRequest, BoardColumnDef, BoardResponse,
+        CreateIssueRequest, CreateIssueResponse, CreateWorkflowStatusRequest, DeleteWorkflowStatusQuery,
+        IssueDetailResponse, IssueListItem, ListIssuesQuery, ListIssuesResponse, ListMyIssuesQuery,
+        ListMyIssuesResponse, ListProjectIssuesResponse, ListWorkflowStatusesResponse, MyIssueItem,
+        MyIssuesCursor,
+        PatchWorkflowStatusRequest, UpdateIssueBoardPositionRequest,
+        UpdateIssueBoardPositionResponse, UpdateIssueRequest, UpdateIssueResponse,
+        UpdateIssueStatusRequest, UpdateIssueStatusResponse, WorkflowStatusesByCategory,
+        WorkflowStatusItem,
     },
     repository as issues_repo,
 };
@@ -71,8 +74,45 @@ pub async fn create_issue(
         }
     }
 
-    let status = req.status.as_deref().unwrap_or("backlog");
     let priority = req.priority.as_deref().unwrap_or("none");
+
+    let workflow_status_id = if let Some(wid) = req.workflow_status_id {
+        match issues_repo::status_belongs_to_project(&mut *tx, project_id, wid).await {
+            Ok(true) => wid,
+            Ok(false) => {
+                return (StatusCode::BAD_REQUEST, "workflow_status_id not in project").into_response();
+            }
+            Err(e) => {
+                eprintln!("create_issue workflow check error: {e:?}");
+                return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+            }
+        }
+    } else if let Some(ref slug) = req.workflow_status_slug {
+        match issues_repo::resolve_status_id_by_slug(&mut *tx, project_id, slug).await {
+            Ok(Some(id)) => id,
+            Ok(None) => {
+                return (StatusCode::BAD_REQUEST, "unknown workflow_status_slug").into_response();
+            }
+            Err(e) => {
+                eprintln!("create_issue workflow slug error: {e:?}");
+                return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+            }
+        }
+    } else {
+        match issues_repo::default_workflow_status_id_for_project(&mut *tx, project_id).await {
+            Ok(Some(id)) => id,
+            Ok(None) => {
+                return (StatusCode::INTERNAL_SERVER_ERROR, "project has no default workflow status")
+                    .into_response();
+            }
+            Err(e) => {
+                eprintln!("create_issue default workflow error: {e:?}");
+                return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+            }
+        }
+    };
+
+    let is_blocked = req.is_blocked.unwrap_or(false);
 
     let (issue_id, title) = match issues_repo::insert_issue_returning_id_title(
         &mut tx,
@@ -83,7 +123,8 @@ pub async fn create_issue(
         req.description.clone(),
         user_id,
         req.assignee_id,
-        status,
+        workflow_status_id,
+        is_blocked,
         priority,
     )
     .await
@@ -122,9 +163,14 @@ pub async fn create_issue(
 fn my_item_from_row(row: issues_repo::MyIssueRow) -> MyIssueItem {
     MyIssueItem {
         id: row.id,
+        project_id: row.project_id,
         display_key: format!("{}-{}", row.project_key, row.key_seq),
         title: row.title,
-        status: row.status,
+        status: row.status_slug.clone(),
+        workflow_status_id: row.workflow_status_id,
+        status_name: row.status_name,
+        status_category: row.status_category,
+        is_blocked: row.is_blocked,
         priority: row.priority,
     }
 }
@@ -261,7 +307,7 @@ pub async fn list_issues(
         }
     };
 
-    let status_filter = q.status.clone();
+    let status_filter: Option<uuid::Uuid> = q.status.as_deref().and_then(|s| s.parse().ok());
     let q_filter = q.q.clone();
     let assignee_filter: Option<uuid::Uuid> = match q.assignee.as_deref() {
         Some("me") => Some(user_id),
@@ -295,7 +341,11 @@ pub async fn list_issues(
             issue_id: r.id,
             display_key: format!("{}-{}", project_key, r.key_seq),
             title: r.title,
-            status: r.status,
+            status: r.status_slug.clone(),
+            workflow_status_id: r.workflow_status_id,
+            status_name: r.status_name,
+            status_category: r.status_category,
+            is_blocked: r.is_blocked,
         })
         .collect();
 
@@ -331,7 +381,7 @@ pub async fn list_project_issues_by_key(
         return StatusCode::FORBIDDEN.into_response();
     }
 
-    let status_filter = q.status.clone();
+    let status_filter: Option<uuid::Uuid> = q.status.as_deref().and_then(|s| s.parse().ok());
     let q_filter = q.q.clone();
     let assignee_filter: Option<uuid::Uuid> = match q.assignee.as_deref() {
         Some("me") => Some(user_id),
@@ -381,7 +431,11 @@ pub async fn list_project_issues_by_key(
             issue_id: r.id,
             display_key: format!("{}-{}", project.project_key, r.key_seq),
             title: r.title,
-            status: r.status,
+            status: r.status_slug.clone(),
+            workflow_status_id: r.workflow_status_id,
+            status_name: r.status_name,
+            status_category: r.status_category,
+            is_blocked: r.is_blocked,
         })
         .collect();
 
@@ -409,13 +463,6 @@ pub async fn update_issue_status(
     user_id: uuid::Uuid,
     req: UpdateIssueStatusRequest,
 ) -> impl IntoResponse + use<> {
-    let status = req.status;
-
-    let allowed = ["backlog", "todo", "in_progress", "done"];
-    if !allowed.contains(&status.as_str()) {
-        return (StatusCode::BAD_REQUEST, "invalid status").into_response();
-    }
-
     let project_id = match issues_repo::find_issue_project_id_only(pool, issue_id).await {
         Ok(Some(pid)) => pid,
         Ok(None) => return StatusCode::NOT_FOUND.into_response(),
@@ -436,14 +483,53 @@ pub async fn update_issue_status(
         return StatusCode::FORBIDDEN.into_response();
     }
 
-    if let Err(e) = issues_repo::set_issue_status(pool, issue_id, &status).await {
+    let workflow_status_id = if let Some(wid) = req.workflow_status_id {
+        wid
+    } else if let Some(ref cat) = req.category {
+        match issues_repo::first_status_id_in_category_for_project(pool, project_id, cat).await {
+            Ok(Some(id)) => id,
+            Ok(None) => {
+                return (StatusCode::BAD_REQUEST, "unknown category for project").into_response();
+            }
+            Err(e) => {
+                eprintln!("update_issue_status category resolve error: {e:?}");
+                return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+            }
+        }
+    } else {
+        return (StatusCode::BAD_REQUEST, "workflow_status_id or category required").into_response();
+    };
+
+    match issues_repo::status_belongs_to_project(pool, project_id, workflow_status_id).await {
+        Ok(true) => {}
+        Ok(false) => return (StatusCode::BAD_REQUEST, "status not in project").into_response(),
+        Err(e) => {
+            eprintln!("update_issue_status belongs check error: {e:?}");
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
+    }
+
+    if let Err(e) = issues_repo::set_issue_workflow_status(pool, issue_id, workflow_status_id).await {
         eprintln!("update_issue_status update error: {e:?}");
         return StatusCode::INTERNAL_SERVER_ERROR.into_response();
     }
 
+    let slug = match issues_repo::get_workflow_status(pool, workflow_status_id).await {
+        Ok(Some(w)) => w.slug,
+        Ok(None) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+        Err(e) => {
+            eprintln!("update_issue_status reload slug error: {e:?}");
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
+    };
+
     (
         StatusCode::OK,
-        Json(UpdateIssueStatusResponse { issue_id, status }),
+        Json(UpdateIssueStatusResponse {
+            issue_id,
+            workflow_status_id,
+            status: slug,
+        }),
     )
         .into_response()
 }
@@ -513,6 +599,13 @@ pub async fn update_issue(
         return StatusCode::INTERNAL_SERVER_ERROR.into_response();
     }
 
+    if let Some(b) = req.is_blocked {
+        if let Err(e) = issues_repo::set_issue_blocked(pool, issue_row.issue_id, b).await {
+            eprintln!("update_issue blocked error: {e:?}");
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
+    }
+
     (
         StatusCode::OK,
         Json(UpdateIssueResponse {
@@ -527,21 +620,49 @@ pub async fn update_issue(
 
 // --- Board -----------------------------------------------------------------
 
-fn board_columns_from_rows(project_key: &str, rows: Vec<issues_repo::IssueSummaryRow>) -> BTreeMap<String, Vec<IssueListItem>> {
-    let mut columns: BTreeMap<String, Vec<IssueListItem>> = BTreeMap::new();
-    for s in ["backlog", "todo", "in_progress", "done"] {
-        columns.insert(s.to_string(), Vec::new());
+fn summary_to_list_item(project_key: &str, r: issues_repo::IssueSummaryRow) -> IssueListItem {
+    IssueListItem {
+        issue_id: r.id,
+        display_key: format!("{}-{}", project_key, r.key_seq),
+        title: r.title,
+        status: r.status_slug.clone(),
+        workflow_status_id: r.workflow_status_id,
+        status_name: r.status_name,
+        status_category: r.status_category,
+        is_blocked: r.is_blocked,
+    }
+}
+
+async fn build_board_response(
+    pool: &PgPool,
+    project_id: uuid::Uuid,
+    project_key: &str,
+    rows: Vec<issues_repo::IssueSummaryRow>,
+) -> Result<BoardResponse, sqlx::Error> {
+    let defs = issues_repo::list_workflow_statuses_for_project_ordered(pool, project_id).await?;
+    let column_definitions: Vec<BoardColumnDef> = defs
+        .iter()
+        .map(|w| BoardColumnDef {
+            id: w.id,
+            name: w.name.clone(),
+            slug: w.slug.clone(),
+            category: w.category.clone(),
+            position: w.position,
+        })
+        .collect();
+    let mut items_by_column_id: BTreeMap<String, Vec<IssueListItem>> = BTreeMap::new();
+    for d in &defs {
+        items_by_column_id.insert(d.id.to_string(), Vec::new());
     }
     for r in rows {
-        let item = IssueListItem {
-            issue_id: r.id,
-            display_key: format!("{}-{}", project_key, r.key_seq),
-            title: r.title,
-            status: r.status.clone(),
-        };
-        columns.entry(r.status).or_default().push(item);
+        let item = summary_to_list_item(project_key, r);
+        let k = item.workflow_status_id.to_string();
+        items_by_column_id.entry(k).or_default().push(item);
     }
-    columns
+    Ok(BoardResponse {
+        column_definitions,
+        items_by_column_id,
+    })
 }
 
 pub async fn get_board(
@@ -577,8 +698,14 @@ pub async fn get_board(
         }
     };
 
-    let columns = board_columns_from_rows(&project_key, rows);
-    (StatusCode::OK, Json(BoardResponse { columns })).into_response()
+    let board = match build_board_response(pool, project_id, &project_key, rows).await {
+        Ok(b) => b,
+        Err(e) => {
+            eprintln!("get_board build error: {e:?}");
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
+    };
+    (StatusCode::OK, Json(board)).into_response()
 }
 
 pub async fn get_board_by_key(
@@ -615,8 +742,14 @@ pub async fn get_board_by_key(
         }
     };
 
-    let columns = board_columns_from_rows(&project.project_key, rows);
-    (StatusCode::OK, Json(BoardResponse { columns })).into_response()
+    let board = match build_board_response(pool, project.id, &project.project_key, rows).await {
+        Ok(b) => b,
+        Err(e) => {
+            eprintln!("get_board_by_key build error: {e:?}");
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
+    };
+    (StatusCode::OK, Json(board)).into_response()
 }
 
 pub async fn update_issue_board_position(
@@ -625,11 +758,6 @@ pub async fn update_issue_board_position(
     user_id: uuid::Uuid,
     req: UpdateIssueBoardPositionRequest,
 ) -> impl IntoResponse + use<> {
-    let allowed_statuses = ["backlog", "todo", "in_progress", "done"];
-    if !allowed_statuses.contains(&req.status.as_str()) {
-        return (StatusCode::BAD_REQUEST, "invalid status").into_response();
-    }
-
     let project_id = match issues_repo::find_issue_project_id_only(pool, issue_id).await {
         Ok(Some(pid)) => pid,
         Ok(None) => return StatusCode::NOT_FOUND.into_response(),
@@ -650,18 +778,38 @@ pub async fn update_issue_board_position(
         return StatusCode::FORBIDDEN.into_response();
     }
 
-    if let Err(e) =
-        issues_repo::update_issue_status_and_board_order(pool, issue_id, &req.status, req.position).await
+    match issues_repo::status_belongs_to_project(pool, project_id, req.workflow_status_id).await {
+        Ok(true) => {}
+        Ok(false) => return (StatusCode::BAD_REQUEST, "status not in project").into_response(),
+        Err(e) => {
+            eprintln!("update_issue_board_position belongs error: {e:?}");
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
+    }
+
+    if let Err(e) = issues_repo::update_issue_status_and_board_order(
+        pool,
+        issue_id,
+        req.workflow_status_id,
+        req.position,
+    )
+    .await
     {
         eprintln!("update_issue_board_position update error: {e:?}");
         return StatusCode::INTERNAL_SERVER_ERROR.into_response();
     }
 
+    let slug = match issues_repo::get_workflow_status(pool, req.workflow_status_id).await {
+        Ok(Some(w)) => w.slug,
+        _ => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+    };
+
     (
         StatusCode::OK,
         Json(UpdateIssueBoardPositionResponse {
             issue_id,
-            status: req.status,
+            workflow_status_id: req.workflow_status_id,
+            status: slug,
             position: req.position,
         }),
     )
@@ -677,7 +825,11 @@ fn detail_from_row(row: issues_repo::IssueFullRow) -> IssueDetailResponse {
         display_key,
         title: row.title,
         description: row.description,
-        status: row.status,
+        status: row.status_slug.clone(),
+        workflow_status_id: row.workflow_status_id,
+        status_name: row.status_name,
+        status_category: row.status_category,
+        is_blocked: row.is_blocked,
         priority: row.priority,
         assignee_id: row.assignee_id,
         assignee_name: row.assignee_name,
@@ -891,6 +1043,395 @@ pub async fn unassign_issue(
     let payload = serde_json::json!({});
     if let Err(e) = issues_repo::insert_unassigned_event(pool, org_id, issue_id, actor_id, payload).await {
         eprintln!("unassigned event insert error: {e:?}");
+    }
+
+    StatusCode::NO_CONTENT.into_response()
+}
+
+// --- Workflow status settings ----------------------------------------------
+
+const WORKFLOW_CATEGORIES: &[&str] = &[
+    "backlog",
+    "unstarted",
+    "started",
+    "completed",
+    "canceled",
+];
+
+fn slugify_workflow_name(name: &str) -> String {
+    let s: String = name
+        .to_lowercase()
+        .chars()
+        .map(|c| if c.is_alphanumeric() { c } else { '_' })
+        .collect();
+    let t = s.trim_matches('_').replace("__", "_");
+    if t.is_empty() {
+        "status".to_string()
+    } else {
+        t
+    }
+}
+
+pub async fn list_workflow_statuses(
+    pool: &PgPool,
+    org_slug: String,
+    project_key: String,
+    user_id: uuid::Uuid,
+) -> impl IntoResponse + use<> {
+    let project = match issues_repo::find_project_by_org_slug_and_key(pool, &org_slug, &project_key).await {
+        Ok(Some(p)) => p,
+        Ok(None) => return StatusCode::NOT_FOUND.into_response(),
+        Err(e) => {
+            eprintln!("list_workflow_statuses project error: {e:?}");
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
+    };
+
+    let is_member = match events_repo::is_project_member(pool, project.id, user_id).await {
+        Ok(v) => v,
+        Err(e) => {
+            eprintln!("list_workflow_statuses member error: {e:?}");
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
+    };
+    if !is_member {
+        return StatusCode::FORBIDDEN.into_response();
+    }
+
+    let rows = match issues_repo::list_workflow_statuses_for_project_ordered(pool, project.id).await {
+        Ok(r) => r,
+        Err(e) => {
+            eprintln!("list_workflow_statuses query error: {e:?}");
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
+    };
+
+    let mut groups: Vec<WorkflowStatusesByCategory> = WORKFLOW_CATEGORIES
+        .iter()
+        .map(|c| WorkflowStatusesByCategory {
+            category: (*c).to_string(),
+            statuses: Vec::new(),
+        })
+        .collect();
+
+    for w in rows {
+        let item = WorkflowStatusItem {
+            id: w.id,
+            category: w.category.clone(),
+            name: w.name,
+            slug: w.slug,
+            position: w.position,
+            is_default: w.is_default,
+        };
+        if let Some(g) = groups.iter_mut().find(|g| g.category == item.category) {
+            g.statuses.push(item);
+        }
+    }
+
+    (
+        StatusCode::OK,
+        Json(ListWorkflowStatusesResponse { groups }),
+    )
+        .into_response()
+}
+
+pub async fn create_workflow_status(
+    pool: &PgPool,
+    org_slug: String,
+    project_key: String,
+    user_id: uuid::Uuid,
+    req: CreateWorkflowStatusRequest,
+) -> impl IntoResponse + use<> {
+    if !WORKFLOW_CATEGORIES.contains(&req.category.as_str()) {
+        return (StatusCode::BAD_REQUEST, "invalid category").into_response();
+    }
+    if req.name.trim().is_empty() {
+        return (StatusCode::BAD_REQUEST, "name is required").into_response();
+    }
+
+    let project = match issues_repo::find_project_by_org_slug_and_key(pool, &org_slug, &project_key).await {
+        Ok(Some(p)) => p,
+        Ok(None) => return StatusCode::NOT_FOUND.into_response(),
+        Err(e) => {
+            eprintln!("create_workflow_status project error: {e:?}");
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
+    };
+
+    let can = match issues_repo::user_can_manage_workflow_statuses(pool, project.id, user_id).await {
+        Ok(v) => v,
+        Err(e) => {
+            eprintln!("create_workflow_status perm error: {e:?}");
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
+    };
+    if !can {
+        return StatusCode::FORBIDDEN.into_response();
+    }
+
+    let base_slug = req
+        .slug
+        .as_deref()
+        .map(slugify_workflow_name)
+        .unwrap_or_else(|| slugify_workflow_name(&req.name));
+
+    let mut slug = base_slug.clone();
+    let mut n = 0u32;
+    loop {
+        let taken = match issues_repo::slug_in_use(pool, project.id, &slug, None).await {
+            Ok(v) => v,
+            Err(e) => {
+                eprintln!("create_workflow_status slug check error: {e:?}");
+                return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+            }
+        };
+        if !taken {
+            break;
+        }
+        n += 1;
+        slug = format!("{base_slug}_{n}");
+    }
+
+    let max_pos = match issues_repo::max_position_for_project_and_category(
+        pool,
+        project.id,
+        req.category.as_str(),
+    )
+    .await
+    {
+        Ok(v) => v,
+        Err(e) => {
+            eprintln!("create_workflow_status max pos error: {e:?}");
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
+    };
+    let position = max_pos.map(|m| m + 1).unwrap_or(0);
+
+    let name_trim = req.name.trim().to_string();
+    let row = match issues_repo::insert_workflow_status(
+        pool,
+        project.id,
+        &req.category,
+        &name_trim,
+        &slug,
+        position,
+        false,
+    )
+    .await
+    {
+        Ok(r) => r,
+        Err(e) => {
+            eprintln!("create_workflow_status insert error: {e:?}");
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
+    };
+
+    (
+        StatusCode::CREATED,
+        Json(WorkflowStatusItem {
+            id: row.id,
+            category: row.category,
+            name: row.name,
+            slug: row.slug,
+            position: row.position,
+            is_default: row.is_default,
+        }),
+    )
+        .into_response()
+}
+
+pub async fn patch_workflow_status(
+    pool: &PgPool,
+    org_slug: String,
+    project_key: String,
+    status_id: uuid::Uuid,
+    user_id: uuid::Uuid,
+    req: PatchWorkflowStatusRequest,
+) -> impl IntoResponse + use<> {
+    let project = match issues_repo::find_project_by_org_slug_and_key(pool, &org_slug, &project_key).await {
+        Ok(Some(p)) => p,
+        Ok(None) => return StatusCode::NOT_FOUND.into_response(),
+        Err(e) => {
+            eprintln!("patch_workflow_status project error: {e:?}");
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
+    };
+
+    let can = match issues_repo::user_can_manage_workflow_statuses(pool, project.id, user_id).await {
+        Ok(v) => v,
+        Err(e) => {
+            eprintln!("patch_workflow_status perm error: {e:?}");
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
+    };
+    if !can {
+        return StatusCode::FORBIDDEN.into_response();
+    }
+
+    let current = match issues_repo::get_workflow_status(pool, status_id).await {
+        Ok(Some(w)) => w,
+        Ok(None) => return StatusCode::NOT_FOUND.into_response(),
+        Err(e) => {
+            eprintln!("patch_workflow_status load error: {e:?}");
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
+    };
+    if current.project_id != project.id {
+        return StatusCode::NOT_FOUND.into_response();
+    }
+
+    let new_slug = req.slug.as_deref().map(slugify_workflow_name);
+    if let Some(ref s) = new_slug {
+        match issues_repo::slug_in_use(pool, project.id, s, Some(status_id)).await {
+            Ok(true) => return (StatusCode::BAD_REQUEST, "slug already in use").into_response(),
+            Ok(false) => {}
+            Err(e) => {
+                eprintln!("patch_workflow_status slug check error: {e:?}");
+                return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+            }
+        }
+    }
+
+    let updated = match issues_repo::update_workflow_status_fields(
+        pool,
+        status_id,
+        req.name.as_deref().map(str::trim),
+        new_slug.as_deref(),
+        req.position,
+    )
+    .await
+    {
+        Ok(u) => u,
+        Err(e) => {
+            eprintln!("patch_workflow_status update error: {e:?}");
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
+    };
+    let Some(mut row) = updated else {
+        return StatusCode::NOT_FOUND.into_response();
+    };
+
+    if req.is_default == Some(true) {
+        let mut tx = match pool.begin().await {
+            Ok(tx) => tx,
+            Err(_) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+        };
+        if let Err(e) =
+            issues_repo::set_workflow_status_default_tx(&mut tx, status_id, project.id).await
+        {
+            eprintln!("patch_workflow_status default tx error: {e:?}");
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
+        if let Err(e) = tx.commit().await {
+            eprintln!("patch_workflow_status commit error: {e:?}");
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
+        row = match issues_repo::get_workflow_status(pool, status_id).await {
+            Ok(Some(w)) => w,
+            _ => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+        };
+    }
+
+    (
+        StatusCode::OK,
+        Json(WorkflowStatusItem {
+            id: row.id,
+            category: row.category,
+            name: row.name,
+            slug: row.slug,
+            position: row.position,
+            is_default: row.is_default,
+        }),
+    )
+        .into_response()
+}
+
+pub async fn delete_workflow_status(
+    pool: &PgPool,
+    org_slug: String,
+    project_key: String,
+    status_id: uuid::Uuid,
+    user_id: uuid::Uuid,
+    q: DeleteWorkflowStatusQuery,
+) -> impl IntoResponse + use<> {
+    let project = match issues_repo::find_project_by_org_slug_and_key(pool, &org_slug, &project_key).await {
+        Ok(Some(p)) => p,
+        Ok(None) => return StatusCode::NOT_FOUND.into_response(),
+        Err(e) => {
+            eprintln!("delete_workflow_status project error: {e:?}");
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
+    };
+
+    let can = match issues_repo::user_can_manage_workflow_statuses(pool, project.id, user_id).await {
+        Ok(v) => v,
+        Err(e) => {
+            eprintln!("delete_workflow_status perm error: {e:?}");
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
+    };
+    if !can {
+        return StatusCode::FORBIDDEN.into_response();
+    }
+
+    let current = match issues_repo::get_workflow_status(pool, status_id).await {
+        Ok(Some(w)) => w,
+        Ok(None) => return StatusCode::NOT_FOUND.into_response(),
+        Err(e) => {
+            eprintln!("delete_workflow_status load error: {e:?}");
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
+    };
+    if current.project_id != project.id {
+        return StatusCode::NOT_FOUND.into_response();
+    }
+
+    if q.reassign_to == status_id {
+        return (StatusCode::BAD_REQUEST, "reassign_to must differ from deleted status").into_response();
+    }
+
+    match issues_repo::status_belongs_to_project(pool, project.id, q.reassign_to).await {
+        Ok(true) => {}
+        Ok(false) => return (StatusCode::BAD_REQUEST, "reassign_to not in project").into_response(),
+        Err(e) => {
+            eprintln!("delete_workflow_status reassign check error: {e:?}");
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
+    }
+
+    let mut tx = match pool.begin().await {
+        Ok(tx) => tx,
+        Err(_) => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+    };
+
+    if let Err(e) = issues_repo::reassign_issues_status(&mut *tx, status_id, q.reassign_to).await {
+        eprintln!("delete_workflow_status reassign error: {e:?}");
+        return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+    }
+
+    let cnt = match issues_repo::count_issues_on_status(&mut *tx, status_id).await {
+        Ok(c) => c,
+        Err(e) => {
+            eprintln!("delete_workflow_status count error: {e:?}");
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
+    };
+    if cnt > 0 {
+        return (StatusCode::INTERNAL_SERVER_ERROR, "issues still on status").into_response();
+    }
+
+    match issues_repo::delete_workflow_status(&mut *tx, status_id).await {
+        Ok(0) => return StatusCode::NOT_FOUND.into_response(),
+        Ok(_) => {}
+        Err(e) => {
+            eprintln!("delete_workflow_status delete error: {e:?}");
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
+    }
+
+    if let Err(e) = tx.commit().await {
+        eprintln!("delete_workflow_status commit error: {e:?}");
+        return StatusCode::INTERNAL_SERVER_ERROR.into_response();
     }
 
     StatusCode::NO_CONTENT.into_response()

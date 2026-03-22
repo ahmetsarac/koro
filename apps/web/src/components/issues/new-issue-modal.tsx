@@ -17,16 +17,17 @@ import {
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
+import { Checkbox } from "@/components/ui/checkbox"
 import { DescriptionEditor } from "./description-editor"
 import { fetchMyProjects } from "@/lib/my-projects"
 import type { Project } from "@/app/[orgSlug]/projects/data/schema"
-import { statuses, priorities } from "@/app/[orgSlug]/my-issues/data/data"
+import { priorities } from "@/app/[orgSlug]/my-issues/data/data"
 import {
   HelpCircle,
   Circle,
   Timer,
-  Ban,
   CheckCircle,
+  XCircle,
   Flame,
   ArrowUp,
   ArrowRight,
@@ -35,15 +36,27 @@ import {
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
-const statusConfig: Record<
+const categoryStyle: Record<
   string,
-  { label: string; icon: React.ElementType; color: string }
+  { icon: React.ElementType; color: string }
 > = {
-  backlog: { label: "Backlog", icon: HelpCircle, color: "bg-muted text-muted-foreground" },
-  todo: { label: "Todo", icon: Circle, color: "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300" },
-  in_progress: { label: "In Progress", icon: Timer, color: "bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300" },
-  blocked: { label: "Blocked", icon: Ban, color: "bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300" },
-  done: { label: "Done", icon: CheckCircle, color: "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300" },
+  backlog: { icon: HelpCircle, color: "bg-muted text-muted-foreground" },
+  unstarted: {
+    icon: Circle,
+    color: "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300",
+  },
+  started: {
+    icon: Timer,
+    color: "bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300",
+  },
+  completed: {
+    icon: CheckCircle,
+    color: "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300",
+  },
+  canceled: {
+    icon: XCircle,
+    color: "bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-300",
+  },
 }
 
 const priorityConfig: Record<
@@ -63,18 +76,25 @@ interface ProjectMember {
   project_role: string
 }
 
-const VALID_STATUSES = ["backlog", "todo", "in_progress", "blocked", "done"] as const
+interface WorkflowOption {
+  id: string
+  category: string
+  name: string
+  slug: string
+  position: number
+  is_default: boolean
+}
 
 export interface NewIssueModalProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   orgSlug: string
-  /** When provided (e.g. from project page), project is pre-selected and dropdown disabled. */
   initialProjectKey?: string
-  /** Display name when dropdown is disabled (e.g. from project page). */
   initialProjectName?: string
-  /** When provided (e.g. from kanban column plus), status is pre-selected. */
-  initialStatus?: string
+  /** Workflow status UUID (e.g. from project Kanban column). */
+  initialWorkflowStatusId?: string
+  /** First status in this category when user picks a project (e.g. My Issues board). */
+  initialWorkflowCategory?: string
 }
 
 export function NewIssueModal({
@@ -83,19 +103,23 @@ export function NewIssueModal({
   orgSlug,
   initialProjectKey,
   initialProjectName,
-  initialStatus: initialStatusProp,
+  initialWorkflowStatusId: initialWorkflowStatusIdProp,
+  initialWorkflowCategory: initialWorkflowCategoryProp,
 }: NewIssueModalProps) {
   const [projects, setProjects] = React.useState<Project[]>([])
   const [projectsLoading, setProjectsLoading] = React.useState(false)
   const [members, setMembers] = React.useState<ProjectMember[]>([])
   const [membersLoading, setMembersLoading] = React.useState(false)
+  const [workflowOptions, setWorkflowOptions] = React.useState<WorkflowOption[]>([])
+  const [workflowLoading, setWorkflowLoading] = React.useState(false)
   const isProjectFixed = Boolean(initialProjectKey)
   const [selectedKey, setSelectedKey] = React.useState<string>(
     initialProjectKey ?? ""
   )
   const [title, setTitle] = React.useState("")
   const [description, setDescription] = React.useState("")
-  const [status, setStatus] = React.useState("backlog")
+  const [workflowStatusId, setWorkflowStatusId] = React.useState("")
+  const [isBlocked, setIsBlocked] = React.useState(false)
   const [priority, setPriority] = React.useState("medium")
   const [assigneeId, setAssigneeId] = React.useState<string>("")
   const [isSubmitting, setIsSubmitting] = React.useState(false)
@@ -127,10 +151,64 @@ export function NewIssueModal({
   }, [open, orgSlug, initialProjectKey])
 
   React.useEffect(() => {
-    if (open && initialStatusProp && VALID_STATUSES.includes(initialStatusProp as (typeof VALID_STATUSES)[number])) {
-      setStatus(initialStatusProp)
+    if (!open || !selectedKey) return
+    let cancelled = false
+    setWorkflowLoading(true)
+    fetch(
+      `/api/orgs/${orgSlug}/projects/${selectedKey}/workflow-statuses`,
+      { cache: "no-store", credentials: "same-origin" }
+    )
+      .then((r) => (r.ok ? r.json() : { groups: [] }))
+      .then((data: { groups?: { category: string; statuses: WorkflowOption[] }[] }) => {
+        if (cancelled) return
+        const flat: WorkflowOption[] = []
+        for (const g of data.groups ?? []) {
+          for (const s of g.statuses) {
+            flat.push({ ...s, category: s.category || g.category })
+          }
+        }
+        flat.sort((a, b) => {
+          const cat = a.category.localeCompare(b.category)
+          if (cat !== 0) return cat
+          return a.position - b.position
+        })
+        setWorkflowOptions(flat)
+      })
+      .finally(() => {
+        if (!cancelled) setWorkflowLoading(false)
+      })
+    return () => {
+      cancelled = true
     }
-  }, [open, initialStatusProp])
+  }, [open, orgSlug, selectedKey])
+
+  React.useEffect(() => {
+    if (!open || workflowOptions.length === 0) return
+    if (
+      initialWorkflowStatusIdProp &&
+      workflowOptions.some((o) => o.id === initialWorkflowStatusIdProp)
+    ) {
+      setWorkflowStatusId(initialWorkflowStatusIdProp)
+      return
+    }
+    if (initialWorkflowCategoryProp) {
+      const first = workflowOptions.find(
+        (o) => o.category === initialWorkflowCategoryProp
+      )
+      if (first) {
+        setWorkflowStatusId(first.id)
+        return
+      }
+    }
+    const d =
+      workflowOptions.find((o) => o.is_default) ?? workflowOptions[0]
+    if (d) setWorkflowStatusId(d.id)
+  }, [
+    open,
+    initialWorkflowStatusIdProp,
+    initialWorkflowCategoryProp,
+    workflowOptions,
+  ])
 
   React.useEffect(() => {
     if (!open || !selectedKey) return
@@ -140,7 +218,7 @@ export function NewIssueModal({
       cache: "no-store",
       credentials: "same-origin",
     })
-      .then((res) => res.ok ? res.json() : { items: [] })
+      .then((res) => (res.ok ? res.json() : { items: [] }))
       .then((data: { items?: ProjectMember[] }) => {
         if (cancelled) return
         setMembers(data.items ?? [])
@@ -158,7 +236,8 @@ export function NewIssueModal({
       if (!next) {
         setTitle("")
         setDescription("")
-        setStatus("backlog")
+        setWorkflowStatusId("")
+        setIsBlocked(false)
         setPriority("medium")
         setAssigneeId("")
       }
@@ -170,7 +249,7 @@ export function NewIssueModal({
   const handleSubmit = React.useCallback(
     async (e: React.FormEvent) => {
       e.preventDefault()
-      if (!selectedKey || !title.trim()) return
+      if (!selectedKey || !title.trim() || !workflowStatusId) return
       const descriptionToSend =
         description &&
         description !== "<p></p>" &&
@@ -189,7 +268,8 @@ export function NewIssueModal({
             body: JSON.stringify({
               title: title.trim(),
               description: descriptionToSend,
-              status,
+              workflow_status_id: workflowStatusId,
+              is_blocked: isBlocked,
               priority,
               assignee_id: assigneeId || null,
             }),
@@ -207,7 +287,8 @@ export function NewIssueModal({
       selectedKey,
       title,
       description,
-      status,
+      workflowStatusId,
+      isBlocked,
       priority,
       assigneeId,
       handleOpenChange,
@@ -218,9 +299,12 @@ export function NewIssueModal({
     ? [{ project_key: initialProjectKey!, name: initialProjectName ?? initialProjectKey! }]
     : projects
 
-  const statusConf = statusConfig[status] ?? statusConfig.backlog
+  const selectedWf = workflowOptions.find((o) => o.id === workflowStatusId)
+  const wfStyle = selectedWf
+    ? categoryStyle[selectedWf.category] ?? categoryStyle.unstarted
+    : categoryStyle.backlog
+  const WfIcon = wfStyle.icon
   const priorityConf = priorityConfig[priority] ?? priorityConfig.medium
-  const StatusIcon = statusConf.icon
   const PriorityIcon = priorityConf.icon
   const assigneeName =
     assigneeId && members.find((m) => m.user_id === assigneeId)?.name
@@ -275,37 +359,57 @@ export function NewIssueModal({
             />
           </div>
 
-          <div className="flex shrink-0 flex-wrap items-center gap-2">
-            <Select value={status} onValueChange={setStatus}>
+          <div className="flex shrink-0 flex-wrap items-center gap-3">
+            <Select
+              value={workflowStatusId}
+              onValueChange={setWorkflowStatusId}
+              disabled={workflowLoading || workflowOptions.length === 0}
+            >
               <SelectTrigger
                 className={cn(
                   "w-fit border-0 bg-transparent p-0 h-auto shadow-none focus:ring-0",
-                  statusConf.color,
+                  wfStyle.color,
                   "rounded-full px-2.5 py-0.5 text-[0.625rem] font-medium"
                 )}
               >
-                <SelectValue>
-                  <span className="flex items-center gap-1.5">
-                    <StatusIcon className="size-3" />
-                    {statusConf.label}
-                  </span>
+                <SelectValue placeholder={workflowLoading ? "Loading…" : "Status"}>
+                  {selectedWf ? (
+                    <span className="flex items-center gap-1.5">
+                      <WfIcon className="size-3" />
+                      {selectedWf.name}
+                    </span>
+                  ) : null}
                 </SelectValue>
               </SelectTrigger>
-              <SelectContent>
-                {statuses.map((s) => {
-                  const c = statusConfig[s.value] ?? statusConfig.backlog
+              <SelectContent className="max-h-72">
+                {workflowOptions.map((o) => {
+                  const c = categoryStyle[o.category] ?? categoryStyle.unstarted
                   const Icon = c.icon
                   return (
-                    <SelectItem key={s.value} value={s.value}>
+                    <SelectItem key={o.id} value={o.id}>
                       <span className="flex items-center gap-2">
                         <Icon className="size-3.5" />
-                        {c.label}
+                        <span>{o.name}</span>
+                        <span className="text-muted-foreground text-xs">
+                          ({o.category})
+                        </span>
                       </span>
                     </SelectItem>
                   )
                 })}
               </SelectContent>
             </Select>
+
+            <div className="flex items-center gap-2">
+              <Checkbox
+                id="new-issue-blocked"
+                checked={isBlocked}
+                onCheckedChange={(v) => setIsBlocked(v === true)}
+              />
+              <Label htmlFor="new-issue-blocked" className="text-xs font-normal">
+                Blocked
+              </Label>
+            </div>
 
             <Select value={priority} onValueChange={setPriority}>
               <SelectTrigger
@@ -388,7 +492,7 @@ export function NewIssueModal({
             >
               Cancel
             </Button>
-            <Button type="submit" disabled={isSubmitting}>
+            <Button type="submit" disabled={isSubmitting || !workflowStatusId}>
               {isSubmitting ? "Creating…" : "Create issue"}
             </Button>
           </div>
