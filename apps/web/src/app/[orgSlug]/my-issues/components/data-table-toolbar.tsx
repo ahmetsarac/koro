@@ -99,7 +99,6 @@ export function DataTableToolbar<TData>({
         </div>
         <Button
           data-icon="inline-start"
-          size="lg"
           type="button"
           onClick={() => newIssueModal?.openNewIssueModal()}
         >
