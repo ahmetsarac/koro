@@ -11,13 +11,7 @@ import {
   SidebarHeader,
   SidebarRail,
 } from "@/components/ui/sidebar"
-import {
-  BookOpenIcon,
-  Crosshair,
-  Boxes,
-  Settings,
-  Building2,
-} from "lucide-react"
+import { Crosshair, Boxes, Building2 } from "lucide-react"
 import { getApiBaseUrl } from "@/lib/api/backend"
 import { ACCESS_TOKEN_COOKIE_NAME } from "@/lib/auth/constants"
 import { meResponseSchema } from "@/lib/user"
@@ -34,16 +28,6 @@ function getNavItems(orgSlug: string) {
       title: "Projects",
       url: `/${orgSlug}/projects`,
       icon: <Boxes />,
-    },
-    {
-      title: "Activity",
-      url: `/${orgSlug}/activity`,
-      icon: <BookOpenIcon />,
-    },
-    {
-      title: "Settings",
-      url: `/${orgSlug}/settings`,
-      icon: <Settings />,
     },
   ]
 }

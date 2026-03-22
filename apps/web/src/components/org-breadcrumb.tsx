@@ -17,7 +17,6 @@ const routeLabels: Record<string, string> = {
   assigned: "Assigned",
   created: "Created",
   projects: "Projects",
-  activity: "Activity",
   settings: "Settings",
 }
 
