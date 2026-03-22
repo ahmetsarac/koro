@@ -93,17 +93,12 @@ function buildFetchParams(
   sorting: SortingState,
   columnFilters: ColumnFiltersState,
   cursor: string | null,
-  filterType: IssueFilterType,
-  blocked?: boolean
+  filterType: IssueFilterType
 ): FetchMyIssuesParams {
   const params: FetchMyIssuesParams = {
     limit: PAGE_SIZE,
     filter_type: filterType,
     ...(cursor ? { cursor } : { offset: 0 }),
-  }
-
-  if (blocked !== undefined) {
-    params.blocked = blocked
   }
 
   const sort = sorting[0]
@@ -121,6 +116,8 @@ function buildFetchParams(
       params.status = Array.isArray(v) ? (v as string[]) : [v as string]
     } else if (f.id === "priority") {
       params.priority = Array.isArray(v) ? (v as string[]) : [v as string]
+    } else if (f.id === "relations") {
+      params.relations = Array.isArray(v) ? (v as string[]) : [v as string]
     }
   }
 
@@ -176,7 +173,7 @@ export function DataTable({ orgSlug, columns, filterType }: DataTableProps) {
 
   const [rowSelection, setRowSelection] = React.useState({})
   const [columnVisibility, setColumnVisibility] =
-    React.useState<VisibilityState>({})
+    React.useState<VisibilityState>({ relations: false })
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>(
     []
   )
@@ -185,9 +182,84 @@ export function DataTable({ orgSlug, columns, filterType }: DataTableProps) {
   const [containerHeight, setContainerHeight] = React.useState(0)
   const [listBodyOverflows, setListBodyOverflows] = React.useState(false)
   const [facets, setFacets] = React.useState<IssueFacets | null>(null)
-  const [blockedFilter, setBlockedFilter] = React.useState<boolean | undefined>(
-    undefined
+  const boardHiddenStorageKey = `koro_my_issues_hidden_board_cols_${orgSlug}_${filterType}`
+  const hideZeroBoardStorageKey = `koro_my_issues_hide_zero_board_cols_${orgSlug}_${filterType}`
+  const [hiddenBoardColumnIds, setHiddenBoardColumnIds] = React.useState<
+    Set<string>
+  >(() => new Set())
+  const [hideZeroCountBoardColumns, setHideZeroCountBoardColumns] =
+    React.useState(false)
+
+  React.useLayoutEffect(() => {
+    try {
+      const raw = sessionStorage.getItem(boardHiddenStorageKey)
+      setHiddenBoardColumnIds(
+        raw ? new Set(JSON.parse(raw) as string[]) : new Set()
+      )
+    } catch {
+      setHiddenBoardColumnIds(new Set())
+    }
+  }, [boardHiddenStorageKey])
+
+  React.useLayoutEffect(() => {
+    try {
+      const raw = sessionStorage.getItem(hideZeroBoardStorageKey)
+      setHideZeroCountBoardColumns(raw === "1" || raw === "true")
+    } catch {
+      setHideZeroCountBoardColumns(false)
+    }
+  }, [hideZeroBoardStorageKey])
+
+  const hideBoardColumn = React.useCallback(
+    (columnId: string) => {
+      setHiddenBoardColumnIds((prev) => {
+        const next = new Set(prev)
+        next.add(columnId)
+        try {
+          sessionStorage.setItem(
+            boardHiddenStorageKey,
+            JSON.stringify([...next])
+          )
+        } catch {
+          /* ignore */
+        }
+        return next
+      })
+    },
+    [boardHiddenStorageKey]
   )
+
+  const unhideBoardColumn = React.useCallback(
+    (columnId: string) => {
+      setHiddenBoardColumnIds((prev) => {
+        const next = new Set(prev)
+        next.delete(columnId)
+        try {
+          sessionStorage.setItem(
+            boardHiddenStorageKey,
+            JSON.stringify([...next])
+          )
+        } catch {
+          /* ignore */
+        }
+        return next
+      })
+    },
+    [boardHiddenStorageKey]
+  )
+
+  const setHideZeroCountBoardColumnsPersisted = React.useCallback(
+    (value: boolean) => {
+      setHideZeroCountBoardColumns(value)
+      try {
+        sessionStorage.setItem(hideZeroBoardStorageKey, value ? "1" : "0")
+      } catch {
+        /* ignore */
+      }
+    },
+    [hideZeroBoardStorageKey]
+  )
+
   const [view, setViewState] = React.useState<"list" | "board">(initialView)
   const setView = React.useCallback((next: "list" | "board") => {
     setViewState(next)
@@ -295,8 +367,7 @@ export function DataTable({ orgSlug, columns, filterType }: DataTableProps) {
         sorting,
         columnFilters,
         nextCursor,
-        filterType,
-        blockedFilter
+        filterType
       )
       const res = await fetchMyIssues(params)
 
@@ -316,7 +387,6 @@ export function DataTable({ orgSlug, columns, filterType }: DataTableProps) {
     sorting,
     columnFilters,
     filterType,
-    blockedFilter,
   ])
 
   // Board görünümünde tüm veriyi yükle (liste pagination ile devam eder)
@@ -343,20 +413,17 @@ export function DataTable({ orgSlug, columns, filterType }: DataTableProps) {
     getFacetedUniqueValues: getFacetedUniqueValues(),
   })
 
-  // Sort/filter/blocked değişince cache temizle, scroll başa al ve yeniden yükle
+  // Sort/filter değişince cache temizle, scroll başa al ve yeniden yükle
   const prevSortingRef = React.useRef(sorting)
   const prevFiltersRef = React.useRef(columnFilters)
-  const prevBlockedRef = React.useRef(blockedFilter)
 
   React.useEffect(() => {
     const sortingChanged = JSON.stringify(prevSortingRef.current) !== JSON.stringify(sorting)
     const filtersChanged = JSON.stringify(prevFiltersRef.current) !== JSON.stringify(columnFilters)
-    const blockedChanged = prevBlockedRef.current !== blockedFilter
 
-    if (sortingChanged || filtersChanged || blockedChanged) {
+    if (sortingChanged || filtersChanged) {
       prevSortingRef.current = sorting
       prevFiltersRef.current = columnFilters
-      prevBlockedRef.current = blockedFilter
 
       clearScrollState(filterType)
       scrollContainerRef.current?.scrollTo({ top: 0 })
@@ -378,8 +445,7 @@ export function DataTable({ orgSlug, columns, filterType }: DataTableProps) {
             sorting,
             columnFilters,
             null,
-            filterType,
-            blockedFilter
+            filterType
           )
           const res = await fetchMyIssues(params)
 
@@ -404,13 +470,13 @@ export function DataTable({ orgSlug, columns, filterType }: DataTableProps) {
         cancelled = true
       }
     }
-  }, [sorting, columnFilters, filterType, blockedFilter])
+  }, [sorting, columnFilters, filterType])
 
   const rows = table.getRowModel().rows
   const selectedCount = table.getSelectedRowModel().rows.length
   const visibleColumnCount =
     table.getVisibleLeafColumns().length || columns.length
-  const { boardColumns, boardItems, statusMetaByWorkflowId } = React.useMemo(() => {
+  const { allBoardColumns, boardItems, statusMetaByWorkflowId } = React.useMemo(() => {
     type StatusMeta = {
       workflow_status_id: string
       status_name: string
@@ -418,30 +484,47 @@ export function DataTable({ orgSlug, columns, filterType }: DataTableProps) {
       status_slug: string
       project_id: string
     }
-    const byId = new Map<string, StatusMeta>()
+    const facetStatuses = facets?.status ?? []
+    const seenFacet = new Set(facetStatuses.map((f) => f.workflow_status_id))
+    const orphanFromRows = []
     for (const row of rows) {
       const it = row.original
-      if (!byId.has(it.workflow_status_id)) {
-        byId.set(it.workflow_status_id, {
+      if (!seenFacet.has(it.workflow_status_id)) {
+        orphanFromRows.push({
           workflow_status_id: it.workflow_status_id,
-          status_name: it.status_name,
-          status_category: it.status_category,
-          status_slug: it.status,
           project_id: it.project_id,
+          name: it.status_name,
+          slug: it.status,
+          category: it.status_category,
+          position: 999_999,
+          count: 0,
         })
+        seenFacet.add(it.workflow_status_id)
       }
     }
-    const sorted = [...byId.values()].sort((a, b) => {
-      const rc = categoryRank(a.status_category) - categoryRank(b.status_category)
+    const combined = [...facetStatuses, ...orphanFromRows]
+    const sorted = [...combined].sort((a, b) => {
+      const rc = categoryRank(a.category) - categoryRank(b.category)
       if (rc !== 0) return rc
-      return a.status_name.localeCompare(b.status_name)
+      if (a.position !== b.position) return a.position - b.position
+      return a.name.localeCompare(b.name)
     })
     const cols = sorted.map((m) => ({
       id: m.workflow_status_id,
-      label: m.status_name,
-      icon: iconForIssueCategory(m.status_category),
+      label: m.name,
+      icon: iconForIssueCategory(m.category),
       projectId: m.project_id,
     }))
+    const byId = new Map<string, StatusMeta>()
+    for (const m of sorted) {
+      byId.set(m.workflow_status_id, {
+        workflow_status_id: m.workflow_status_id,
+        status_name: m.name,
+        status_category: m.category,
+        status_slug: m.slug,
+        project_id: m.project_id,
+      })
+    }
     const grouped: Record<string, Issue[]> = {}
     for (const c of cols) {
       grouped[c.id] = []
@@ -452,8 +535,51 @@ export function DataTable({ orgSlug, columns, filterType }: DataTableProps) {
       if (!grouped[k]) grouped[k] = []
       grouped[k].push(it)
     }
-    return { boardColumns: cols, boardItems: grouped, statusMetaByWorkflowId: byId }
-  }, [rows])
+    return {
+      allBoardColumns: cols,
+      boardItems: grouped,
+      statusMetaByWorkflowId: byId,
+    }
+  }, [facets, rows])
+
+  const visibleBoardColumns = React.useMemo(
+    () =>
+      allBoardColumns.filter((c) => {
+        if (hiddenBoardColumnIds.has(c.id)) return false
+        if (
+          hideZeroCountBoardColumns &&
+          (boardItems[c.id]?.length ?? 0) === 0
+        ) {
+          return false
+        }
+        return true
+      }),
+    [
+      allBoardColumns,
+      boardItems,
+      hiddenBoardColumnIds,
+      hideZeroCountBoardColumns,
+    ]
+  )
+
+  const visibleBoardItems = React.useMemo(() => {
+    const out: Record<string, Issue[]> = {}
+    for (const c of visibleBoardColumns) {
+      out[c.id] = boardItems[c.id] ?? []
+    }
+    return out
+  }, [visibleBoardColumns, boardItems])
+
+  const boardHiddenColumnsForToolbar = React.useMemo(() => {
+    const labels = new Map(allBoardColumns.map((c) => [c.id, c.label]))
+    return [...hiddenBoardColumnIds]
+      .map((id) => ({
+        id,
+        label: labels.get(id) ?? id,
+        issueCount: boardItems[id]?.length ?? 0,
+      }))
+      .sort((a, b) => a.label.localeCompare(b.label))
+  }, [allBoardColumns, boardItems, hiddenBoardColumnIds])
 
   const visibleCount =
     containerHeight > 0 ? Math.ceil(containerHeight / ROW_HEIGHT) : 12
@@ -534,8 +660,7 @@ export function DataTable({ orgSlug, columns, filterType }: DataTableProps) {
         sorting,
         columnFilters,
         null,
-        filterType,
-        blockedFilter
+        filterType
       )
       const res = await fetchMyIssues(params)
       setItems(res.items)
@@ -546,7 +671,7 @@ export function DataTable({ orgSlug, columns, filterType }: DataTableProps) {
     } catch {
       // keep current state on refetch error
     }
-  }, [sorting, columnFilters, filterType, blockedFilter])
+  }, [sorting, columnFilters, filterType])
 
   const handleBoardMove = React.useCallback(
     async ({
@@ -633,8 +758,12 @@ export function DataTable({ orgSlug, columns, filterType }: DataTableProps) {
         facets={facets}
         view={view}
         onViewChange={setView}
-        blockedFilter={blockedFilter}
-        onBlockedFilterChange={setBlockedFilter}
+        boardHiddenColumns={boardHiddenColumnsForToolbar}
+        onUnhideBoardColumn={unhideBoardColumn}
+        hideZeroCountBoardColumns={hideZeroCountBoardColumns}
+        onHideZeroCountBoardColumnsChange={
+          setHideZeroCountBoardColumnsPersisted
+        }
       />
 
       <div className="relative flex max-h-full min-h-0 flex-1 flex-col overflow-hidden">
@@ -763,11 +892,23 @@ export function DataTable({ orgSlug, columns, filterType }: DataTableProps) {
               </div>
             </div>
           </>
+        ) : !isInitialLoading &&
+          !error &&
+          visibleBoardColumns.length === 0 &&
+          allBoardColumns.length > 0 ? (
+          <div className="flex min-h-[200px] flex-1 items-center justify-center rounded-md border border-dashed px-4 text-center text-sm text-muted-foreground">
+            No columns to show. Use <strong>Columns</strong> next to View to show
+            hidden or empty columns again.
+          </div>
+        ) : !isInitialLoading && !error && allBoardColumns.length === 0 ? (
+          <div className="flex min-h-[200px] flex-1 items-center justify-center rounded-md border border-dashed px-4 text-center text-sm text-muted-foreground">
+            No workflow columns match the current filters (no issues in scope).
+          </div>
         ) : (
           <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
             <IssueKanbanBoard
-              columns={boardColumns}
-              itemsByColumn={boardItems}
+              columns={visibleBoardColumns}
+              itemsByColumn={visibleBoardItems}
               isLoading={isInitialLoading}
               error={error}
               emptyMessage="No issues"
@@ -776,6 +917,7 @@ export function DataTable({ orgSlug, columns, filterType }: DataTableProps) {
               getIssueTitle={(issue) => issue.title}
               getIssueHref={(issue) => `/${orgSlug}/issue/${issue.display_key}`}
               getIssueProjectId={(issue) => issue.project_id}
+              onHideColumn={hideBoardColumn}
               onIssueMove={({ issue, issueId, fromColumnId, toColumnId, position }) =>
                 handleBoardMove({
                   issue,

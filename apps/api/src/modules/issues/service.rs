@@ -112,8 +112,6 @@ pub async fn create_issue(
         }
     };
 
-    let is_blocked = req.is_blocked.unwrap_or(false);
-
     let (issue_id, title) = match issues_repo::insert_issue_returning_id_title(
         &mut tx,
         p.org_id,
@@ -124,7 +122,6 @@ pub async fn create_issue(
         user_id,
         req.assignee_id,
         workflow_status_id,
-        is_blocked,
         priority,
     )
     .await
@@ -597,13 +594,6 @@ pub async fn update_issue(
     {
         eprintln!("update_issue update error: {e:?}");
         return StatusCode::INTERNAL_SERVER_ERROR.into_response();
-    }
-
-    if let Some(b) = req.is_blocked {
-        if let Err(e) = issues_repo::set_issue_blocked(pool, issue_row.issue_id, b).await {
-            eprintln!("update_issue blocked error: {e:?}");
-            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
-        }
     }
 
     (

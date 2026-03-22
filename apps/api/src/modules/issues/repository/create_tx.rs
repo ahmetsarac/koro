@@ -55,13 +55,12 @@ pub async fn insert_issue_returning_id_title(
     reporter_id: Uuid,
     assignee_id: Option<Uuid>,
     workflow_status_id: Uuid,
-    is_blocked: bool,
     priority: &str,
 ) -> Result<(Uuid, String), sqlx::Error> {
     let row: (Uuid, String) = sqlx::query_as(
         r#"
-        INSERT INTO issues (org_id, project_id, key_seq, title, description, reporter_id, assignee_id, workflow_status_id, is_blocked, priority)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+        INSERT INTO issues (org_id, project_id, key_seq, title, description, reporter_id, assignee_id, workflow_status_id, priority)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
         RETURNING id, title
         "#,
     )
@@ -73,7 +72,6 @@ pub async fn insert_issue_returning_id_title(
     .bind(reporter_id)
     .bind(assignee_id)
     .bind(workflow_status_id)
-    .bind(is_blocked)
     .bind(priority)
     .fetch_one(&mut **tx)
     .await?;

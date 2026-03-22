@@ -2,7 +2,15 @@
 
 import * as React from "react"
 import Link from "next/link"
-import { Ban, Plus } from "lucide-react"
+import { Ban, MoreHorizontal, Plus } from "lucide-react"
+
+import { Button } from "@/components/ui/button"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import {
   DndContext,
   DragOverlay,
@@ -65,6 +73,8 @@ interface IssueKanbanBoardProps<TIssue extends KanbanIssue> {
   onAddIssue?: (columnId: string) => void
   /** Used with `KanbanColumn.projectId` to block cross-project drops on My Issues. */
   getIssueProjectId?: (issue: TIssue) => string | undefined
+  /** My Issues board: column header menu to hide a column. */
+  onHideColumn?: (columnId: string) => void
 }
 
 function normalizeColumns<TIssue extends KanbanIssue>(
@@ -105,6 +115,7 @@ export function IssueKanbanBoard<TIssue extends KanbanIssue>({
   onReload,
   onAddIssue,
   getIssueProjectId,
+  onHideColumn,
 }: IssueKanbanBoardProps<TIssue>) {
   const normalizedColumns = React.useMemo(
     () => normalizeColumns(columns, itemsByColumn),
@@ -317,10 +328,17 @@ export function IssueKanbanBoard<TIssue extends KanbanIssue>({
   }
 
   if (isLoading) {
+    const skeletonColumns =
+      columns.length > 0
+        ? columns
+        : ([1, 2, 3, 4, 5] as const).map((n) => ({
+            id: `sk-${n}`,
+            label: "",
+          }))
     return (
       <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         <div className="flex min-h-0 flex-1 gap-4 overflow-x-auto overflow-y-hidden pb-2">
-          {columns.map((column) => (
+          {skeletonColumns.map((column) => (
             <div
               key={column.id}
               className="flex h-full max-h-full min-h-0 w-72 shrink-0 flex-col rounded-lg border bg-muted/30"
@@ -376,6 +394,7 @@ export function IssueKanbanBoard<TIssue extends KanbanIssue>({
               getIssueHref={getIssueHref}
               onAddIssue={onAddIssue}
               isInteractive={isInteractive}
+              onHideColumn={onHideColumn}
             />
           ))}
         </div>
@@ -412,6 +431,7 @@ interface BoardColumnProps<TIssue extends KanbanIssue> {
   getIssueHref?: (issue: TIssue) => string
   onAddIssue?: (columnId: string) => void
   isInteractive: boolean
+  onHideColumn?: (columnId: string) => void
 }
 
 function BoardColumn<TIssue extends KanbanIssue>({
@@ -429,6 +449,7 @@ function BoardColumn<TIssue extends KanbanIssue>({
   getIssueHref,
   onAddIssue,
   isInteractive,
+  onHideColumn,
 }: BoardColumnProps<TIssue>) {
   const issueIds = React.useMemo(() => issues.map(getIssueId), [issues, getIssueId])
   const dropDisabled = Boolean(
@@ -444,12 +465,40 @@ function BoardColumn<TIssue extends KanbanIssue>({
 
   return (
     <div className="flex h-full max-h-full min-h-0 w-72 shrink-0 flex-col rounded-lg border bg-muted/30">
-      <div className="flex shrink-0 items-center gap-2 rounded-t-lg border-b bg-background p-3">
+      <div className="flex shrink-0 items-center gap-2 rounded-t-lg border-b bg-background px-2 py-2">
         {ColumnIcon ? (
-          <ColumnIcon className="h-4 w-4 text-muted-foreground" />
+          <ColumnIcon className="h-4 w-4 shrink-0 text-muted-foreground" />
         ) : null}
-        <span className="text-xs font-medium">{label}</span>
-        <span className="ml-auto text-xs text-muted-foreground">{issues.length}</span>
+        <div className="flex min-w-0 flex-1 items-center gap-1.5">
+          <span className="min-w-0 truncate text-xs font-medium">{label}</span>
+          <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
+            {issues.length}
+          </span>
+        </div>
+        {onHideColumn ? (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7 shrink-0"
+                aria-label="Column options"
+                onPointerDown={(e) => e.stopPropagation()}
+              >
+                <MoreHorizontal className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-44">
+              <DropdownMenuItem
+                className="text-xs"
+                onClick={() => onHideColumn(id)}
+              >
+                Hide column
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        ) : null}
       </div>
 
       <SortableContext

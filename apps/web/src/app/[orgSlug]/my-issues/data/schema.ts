@@ -2,9 +2,11 @@ import { z } from "zod"
 
 export const statusFacetEntrySchema = z.object({
   workflow_status_id: z.string().uuid(),
+  project_id: z.string().uuid(),
   name: z.string(),
   slug: z.string(),
   category: z.string(),
+  position: z.number().int(),
   count: z.number().int().nonnegative(),
 })
 
@@ -25,9 +27,15 @@ export const issueSchema = z.object({
 
 export type Issue = z.infer<typeof issueSchema>
 
+export const relationsFacetSchema = z.object({
+  blocked: z.number().int().nonnegative(),
+  blocking: z.number().int().nonnegative(),
+})
+
 export const issueFacetsSchema = z.object({
   status: z.array(statusFacetEntrySchema),
   priority: z.record(z.string(), z.number().int().nonnegative()),
+  relations: relationsFacetSchema.default({ blocked: 0, blocking: 0 }),
 })
 
 export type IssueFacets = z.infer<typeof issueFacetsSchema>

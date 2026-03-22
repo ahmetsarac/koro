@@ -22,8 +22,8 @@ export type FetchMyIssuesParams = {
   q?: string
   status?: string | string[]
   priority?: string | string[]
-  /** `true` / `false` string sent as query param */
-  blocked?: boolean
+  /** `blocked` / `blocking`, comma-joined when multiple */
+  relations?: string | string[]
   sort_by?: IssueSortBy
   sort_dir?: IssueSortDir
   filter_type?: IssueFilterType
@@ -32,7 +32,7 @@ export type FetchMyIssuesParams = {
 function buildSearchParams(params: FetchMyIssuesParams) {
   const searchParams = new URLSearchParams()
 
-  const arrayKeys = ["status", "priority"] as const
+  const arrayKeys = ["status", "priority", "relations"] as const
   for (const key of arrayKeys) {
     const value = params[key]
     if (value === undefined) continue
@@ -41,7 +41,8 @@ function buildSearchParams(params: FetchMyIssuesParams) {
     if (joined) searchParams.set(key, joined)
   }
 
-  const { status: _s, priority: _p, cursor, offset, ...rest } = params
+  const { status: _s, priority: _p, relations: _r, cursor, offset, ...rest } =
+    params
   if (cursor) {
     searchParams.set("cursor", cursor)
   } else if (offset !== undefined) {

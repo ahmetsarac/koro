@@ -15,6 +15,7 @@ pub struct CreateRelationResponse {
 
 #[derive(Serialize, ToSchema)]
 pub struct RelationItem {
+    pub relation_id: Uuid,
     pub issue_key: String,
     pub title: String,
 }

@@ -158,6 +158,7 @@ pub async fn get_relations(
 
     for r in outgoing {
         let item = RelationItem {
+            relation_id: r.relation_id,
             issue_key: format!("{}-{}", r.other_project_key, r.other_key_seq),
             title: r.other_title,
         };
@@ -174,6 +175,7 @@ pub async fn get_relations(
 
     for r in incoming {
         let item = RelationItem {
+            relation_id: r.relation_id,
             issue_key: format!("{}-{}", r.other_project_key, r.other_key_seq),
             title: r.other_title,
         };

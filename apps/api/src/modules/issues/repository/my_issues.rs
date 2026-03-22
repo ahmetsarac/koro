@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use sqlx::{FromRow, PgPool, Postgres, QueryBuilder};
 
 use crate::modules::issues::models::{
@@ -69,11 +71,18 @@ struct FacetRowStr {
 }
 
 #[derive(FromRow)]
-struct StatusFacetRow {
+struct WorkflowStatusFacetRow {
     workflow_status_id: uuid::Uuid,
+    project_id: uuid::Uuid,
     name: String,
     slug: String,
     category: String,
+    position: i32,
+}
+
+#[derive(FromRow)]
+struct StatusCountRow {
+    workflow_status_id: uuid::Uuid,
     count: i64,
 }
 
@@ -119,9 +128,34 @@ fn apply_my_issues_filters(
         }
     }
 
-    if let Some(blocked) = query.blocked {
-        builder.push(" AND i.is_blocked = ");
-        builder.push_bind(blocked);
+    if exclude_facet != Some("relations") {
+        if let Some(rel) = query.relations.as_deref() {
+            let parts: Vec<&str> = rel
+                .split(',')
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+                .collect();
+            let want_blocked = parts.iter().any(|p| *p == "blocked");
+            let want_blocking = parts.iter().any(|p| *p == "blocking");
+            match (want_blocked, want_blocking) {
+                (true, true) => {
+                    builder.push(
+                        " AND (EXISTS (SELECT 1 FROM issue_relations ir WHERE ir.target_issue_id = i.id AND ir.relation_type = 'blocks') OR EXISTS (SELECT 1 FROM issue_relations ir2 WHERE ir2.source_issue_id = i.id AND ir2.relation_type = 'blocks'))",
+                    );
+                }
+                (true, false) => {
+                    builder.push(
+                        " AND EXISTS (SELECT 1 FROM issue_relations ir WHERE ir.target_issue_id = i.id AND ir.relation_type = 'blocks')",
+                    );
+                }
+                (false, true) => {
+                    builder.push(
+                        " AND EXISTS (SELECT 1 FROM issue_relations ir WHERE ir.source_issue_id = i.id AND ir.relation_type = 'blocks')",
+                    );
+                }
+                (false, false) => {}
+            }
+        }
     }
 
     if let Some(search) = query.q.as_deref() {
@@ -238,30 +272,77 @@ pub async fn fetch_facets(
     let mut facets = MyIssueFacets::default();
     let filter_type = query.filter_type.as_deref();
 
-    let mut status_builder = QueryBuilder::<Postgres>::new(
-        r#"SELECT pws.id as workflow_status_id, pws.name, pws.slug, pws.category, COUNT(*)::bigint as count
-           FROM issues i
-           JOIN projects p ON p.id = i.project_id
-           JOIN project_workflow_statuses pws ON pws.id = i.workflow_status_id
-           WHERE "#,
+    // Projects that have at least one issue matching filters **except** status (so board columns
+    // stay stable when filtering by status).
+    let mut project_qb = QueryBuilder::<Postgres>::new(
+        "SELECT DISTINCT i.project_id FROM issues i WHERE ",
     );
-    push_my_issues_user_filter(&mut status_builder, user_id, filter_type);
-    apply_my_issues_filters(&mut status_builder, query, Some("status"));
-    status_builder.push(" GROUP BY pws.id, pws.name, pws.slug, pws.category ORDER BY pws.category, pws.position");
-    let rows: Vec<StatusFacetRow> = status_builder
-        .build_query_as::<StatusFacetRow>()
+    push_my_issues_user_filter(&mut project_qb, user_id, filter_type);
+    apply_my_issues_filters(&mut project_qb, query, Some("status"));
+    let project_ids: Vec<uuid::Uuid> = project_qb
+        .build_query_scalar::<uuid::Uuid>()
         .fetch_all(pool)
         .await?;
-    facets.status = rows
-        .into_iter()
-        .map(|r| StatusFacetEntry {
-            workflow_status_id: r.workflow_status_id,
-            name: r.name,
-            slug: r.slug,
-            category: r.category,
-            count: r.count,
-        })
-        .collect();
+
+    if project_ids.is_empty() {
+        facets.status = Vec::new();
+    } else {
+        let status_rows: Vec<WorkflowStatusFacetRow> = sqlx::query_as(
+            r#"
+            SELECT
+              pws.id AS workflow_status_id,
+              pws.project_id,
+              pws.name,
+              pws.slug,
+              pws.category,
+              pws.position
+            FROM project_workflow_statuses pws
+            WHERE pws.project_id = ANY($1)
+            ORDER BY
+              CASE pws.category
+                WHEN 'backlog' THEN 0
+                WHEN 'unstarted' THEN 1
+                WHEN 'started' THEN 2
+                WHEN 'completed' THEN 3
+                WHEN 'canceled' THEN 4
+                ELSE 5
+              END,
+              pws.position ASC,
+              pws.slug ASC
+            "#,
+        )
+        .bind(&project_ids)
+        .fetch_all(pool)
+        .await?;
+
+        let mut count_qb = QueryBuilder::<Postgres>::new(
+            "SELECT i.workflow_status_id, COUNT(*)::bigint AS count FROM issues i WHERE ",
+        );
+        push_my_issues_user_filter(&mut count_qb, user_id, filter_type);
+        apply_my_issues_filters(&mut count_qb, query, None);
+        count_qb.push(" GROUP BY i.workflow_status_id");
+        let count_rows: Vec<StatusCountRow> = count_qb
+            .build_query_as::<StatusCountRow>()
+            .fetch_all(pool)
+            .await?;
+        let count_map: HashMap<uuid::Uuid, i64> = count_rows
+            .into_iter()
+            .map(|r| (r.workflow_status_id, r.count))
+            .collect();
+
+        facets.status = status_rows
+            .into_iter()
+            .map(|r| StatusFacetEntry {
+                workflow_status_id: r.workflow_status_id,
+                project_id: r.project_id,
+                name: r.name,
+                slug: r.slug,
+                category: r.category,
+                position: r.position,
+                count: *count_map.get(&r.workflow_status_id).unwrap_or(&0),
+            })
+            .collect();
+    }
 
     let mut priority_builder = QueryBuilder::<Postgres>::new(
         "SELECT i.priority as value, COUNT(*) as count FROM issues i WHERE ",
@@ -276,6 +357,30 @@ pub async fn fetch_facets(
     for row in rows {
         facets.priority.insert(row.value, row.count);
     }
+
+    let mut rel_blocked_qb =
+        QueryBuilder::<Postgres>::new("SELECT COUNT(*)::bigint FROM issues i WHERE ");
+    push_my_issues_user_filter(&mut rel_blocked_qb, user_id, filter_type);
+    apply_my_issues_filters(&mut rel_blocked_qb, query, Some("relations"));
+    rel_blocked_qb.push(
+        " AND EXISTS (SELECT 1 FROM issue_relations ir WHERE ir.target_issue_id = i.id AND ir.relation_type = 'blocks')",
+    );
+    facets.relations.blocked = rel_blocked_qb
+        .build_query_scalar::<i64>()
+        .fetch_one(pool)
+        .await?;
+
+    let mut rel_blocking_qb =
+        QueryBuilder::<Postgres>::new("SELECT COUNT(*)::bigint FROM issues i WHERE ");
+    push_my_issues_user_filter(&mut rel_blocking_qb, user_id, filter_type);
+    apply_my_issues_filters(&mut rel_blocking_qb, query, Some("relations"));
+    rel_blocking_qb.push(
+        " AND EXISTS (SELECT 1 FROM issue_relations ir WHERE ir.source_issue_id = i.id AND ir.relation_type = 'blocks')",
+    );
+    facets.relations.blocking = rel_blocking_qb
+        .build_query_scalar::<i64>()
+        .fetch_one(pool)
+        .await?;
 
     Ok(facets)
 }
@@ -307,7 +412,12 @@ pub async fn fetch_item_rows(
     let mut items_query = QueryBuilder::<Postgres>::new(
         r#"SELECT i.id, i.project_id, p.project_key, i.key_seq, i.title,
                   i.workflow_status_id, pws.slug as status_slug, pws.name as status_name,
-                  pws.category as status_category, i.is_blocked, i.priority, i.created_at, i.updated_at
+                  pws.category as status_category,
+                  (EXISTS (
+                      SELECT 1 FROM issue_relations ir
+                      WHERE ir.target_issue_id = i.id AND ir.relation_type = 'blocks'
+                  )) AS is_blocked,
+                  i.priority, i.created_at, i.updated_at
            FROM issues i
            JOIN projects p ON p.id = i.project_id
            JOIN project_workflow_statuses pws ON pws.id = i.workflow_status_id

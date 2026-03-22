@@ -34,7 +34,10 @@ pub async fn find_issue_by_id(pool: &PgPool, issue_id: Uuid) -> Result<Option<Is
             pws.slug AS status_slug,
             pws.name AS status_name,
             pws.category AS status_category,
-            i.is_blocked,
+            (EXISTS (
+                SELECT 1 FROM issue_relations ir
+                WHERE ir.target_issue_id = i.id AND ir.relation_type = 'blocks'
+            )) AS is_blocked,
             i.priority,
             i.assignee_id,
             i.created_at,
@@ -72,7 +75,10 @@ pub async fn find_issue_by_org_slug_key(
             pws.slug AS status_slug,
             pws.name AS status_name,
             pws.category AS status_category,
-            i.is_blocked,
+            (EXISTS (
+                SELECT 1 FROM issue_relations ir
+                WHERE ir.target_issue_id = i.id AND ir.relation_type = 'blocks'
+            )) AS is_blocked,
             i.priority,
             i.assignee_id,
             i.created_at,

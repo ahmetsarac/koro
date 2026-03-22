@@ -113,7 +113,6 @@ async fn main() -> anyhow::Result<()> {
             i + 1
         );
         let slug = WORKFLOW_SLUGS[i as usize % WORKFLOW_SLUGS.len()];
-        let is_blocked = i % 23 == 0;
         let priority = PRIORITIES[i as usize % PRIORITIES.len()];
 
         let workflow_status_id: Uuid = sqlx::query_scalar(
@@ -127,8 +126,8 @@ async fn main() -> anyhow::Result<()> {
 
         sqlx::query(
             r#"
-            INSERT INTO issues (org_id, project_id, key_seq, title, workflow_status_id, is_blocked, priority, assignee_id, reporter_id)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $8)
+            INSERT INTO issues (org_id, project_id, key_seq, title, workflow_status_id, priority, assignee_id, reporter_id)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $7)
             "#,
         )
         .bind(org_id)
@@ -136,7 +135,6 @@ async fn main() -> anyhow::Result<()> {
         .bind(next_seq)
         .bind(&title)
         .bind(workflow_status_id)
-        .bind(is_blocked)
         .bind(priority)
         .bind(user_id)
         .execute(&mut *tx)

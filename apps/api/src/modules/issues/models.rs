@@ -98,8 +98,8 @@ pub struct ListMyIssuesQuery {
     pub sort_by: Option<MyIssueSortBy>,
     pub sort_dir: Option<SortDirection>,
     pub filter_type: Option<String>,
-    /// When `true`, only blocked issues; when `false`, only unblocked; omit for all.
-    pub blocked: Option<bool>,
+    /// Comma-separated: `blocked` (incoming `blocks` relation), `blocking` (outgoing). OR within the set when both present.
+    pub relations: Option<String>,
 }
 
 /// Parse `PROJECTKEY-123` into project key prefix and numeric sequence.
@@ -118,7 +118,6 @@ pub struct CreateIssueRequest {
     pub workflow_status_id: Option<Uuid>,
     /// Slug within the project (e.g. `todo`). Used when `workflow_status_id` is omitted.
     pub workflow_status_slug: Option<String>,
-    pub is_blocked: Option<bool>,
 }
 
 #[derive(Serialize, ToSchema)]
@@ -138,6 +137,7 @@ pub struct IssueListItem {
     pub workflow_status_id: Uuid,
     pub status_name: String,
     pub status_category: String,
+    /// Derived: another issue has a `blocks` relation to this issue.
     pub is_blocked: bool,
 }
 
@@ -165,6 +165,7 @@ pub struct MyIssueItem {
     pub workflow_status_id: Uuid,
     pub status_name: String,
     pub status_category: String,
+    /// Derived: another issue has a `blocks` relation to this issue.
     pub is_blocked: bool,
     pub priority: String,
 }
@@ -172,16 +173,25 @@ pub struct MyIssueItem {
 #[derive(Debug, Serialize, ToSchema)]
 pub struct StatusFacetEntry {
     pub workflow_status_id: Uuid,
+    pub project_id: Uuid,
     pub name: String,
     pub slug: String,
     pub category: String,
+    pub position: i32,
     pub count: i64,
+}
+
+#[derive(Debug, Default, Serialize, ToSchema)]
+pub struct RelationsFacetCounts {
+    pub blocked: i64,
+    pub blocking: i64,
 }
 
 #[derive(Debug, Default, Serialize, ToSchema)]
 pub struct MyIssueFacets {
     pub status: Vec<StatusFacetEntry>,
     pub priority: HashMap<String, i64>,
+    pub relations: RelationsFacetCounts,
 }
 
 #[derive(Serialize, ToSchema)]
@@ -216,7 +226,6 @@ pub struct UpdateIssueRequest {
     pub title: Option<String>,
     pub description: Option<String>,
     pub priority: Option<String>,
-    pub is_blocked: Option<bool>,
 }
 
 #[derive(Serialize, ToSchema)]
@@ -266,6 +275,7 @@ pub struct IssueDetailResponse {
     pub workflow_status_id: Uuid,
     pub status_name: String,
     pub status_category: String,
+    /// Derived: another issue has a `blocks` relation to this issue.
     pub is_blocked: bool,
     pub priority: String,
     pub assignee_id: Option<Uuid>,

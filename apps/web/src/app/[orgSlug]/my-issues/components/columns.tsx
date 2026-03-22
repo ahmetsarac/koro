@@ -120,6 +120,7 @@ export const createColumns = (orgSlug: string): ColumnDef<Issue>[] => [
             <Badge
               variant="outline"
               className="gap-1 border-destructive/30 bg-destructive/10 text-destructive text-[10px]"
+              title="Blocked by another issue"
             >
               <Ban className="size-3" />
               Blocked
@@ -133,6 +134,18 @@ export const createColumns = (orgSlug: string): ColumnDef<Issue>[] => [
       if (!v?.length) return true
       return v.includes(row.original.workflow_status_id)
     },
+  },
+  {
+    id: "relations",
+    accessorFn: () => "",
+    size: 0,
+    minSize: 0,
+    maxSize: 0,
+    header: () => null,
+    cell: () => null,
+    enableSorting: false,
+    enableHiding: true,
+    filterFn: () => true,
   },
   {
     accessorKey: "priority",

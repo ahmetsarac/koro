@@ -68,7 +68,10 @@ pub async fn list_issue_summaries_for_project(
             pws.slug AS status_slug,
             pws.name AS status_name,
             pws.category AS status_category,
-            i.is_blocked
+            (EXISTS (
+                SELECT 1 FROM issue_relations ir
+                WHERE ir.target_issue_id = i.id AND ir.relation_type = 'blocks'
+            )) AS is_blocked
         FROM issues i
         JOIN project_workflow_statuses pws ON pws.id = i.workflow_status_id
         WHERE i.project_id = $1
@@ -138,7 +141,10 @@ pub async fn list_board_issues_by_key_seq(
             pws.slug AS status_slug,
             pws.name AS status_name,
             pws.category AS status_category,
-            i.is_blocked
+            (EXISTS (
+                SELECT 1 FROM issue_relations ir
+                WHERE ir.target_issue_id = i.id AND ir.relation_type = 'blocks'
+            )) AS is_blocked
         FROM issues i
         JOIN project_workflow_statuses pws ON pws.id = i.workflow_status_id
         WHERE i.project_id = $1
@@ -164,7 +170,10 @@ pub async fn list_board_issues_by_board_order(
             pws.slug AS status_slug,
             pws.name AS status_name,
             pws.category AS status_category,
-            i.is_blocked
+            (EXISTS (
+                SELECT 1 FROM issue_relations ir
+                WHERE ir.target_issue_id = i.id AND ir.relation_type = 'blocks'
+            )) AS is_blocked
         FROM issues i
         JOIN project_workflow_statuses pws ON pws.id = i.workflow_status_id
         WHERE i.project_id = $1

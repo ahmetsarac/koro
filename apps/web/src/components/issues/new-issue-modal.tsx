@@ -17,7 +17,6 @@ import {
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
-import { Checkbox } from "@/components/ui/checkbox"
 import { DescriptionEditor } from "./description-editor"
 import { fetchMyProjects } from "@/lib/my-projects"
 import type { Project } from "@/app/[orgSlug]/projects/data/schema"
@@ -119,7 +118,6 @@ export function NewIssueModal({
   const [title, setTitle] = React.useState("")
   const [description, setDescription] = React.useState("")
   const [workflowStatusId, setWorkflowStatusId] = React.useState("")
-  const [isBlocked, setIsBlocked] = React.useState(false)
   const [priority, setPriority] = React.useState("medium")
   const [assigneeId, setAssigneeId] = React.useState<string>("")
   const [isSubmitting, setIsSubmitting] = React.useState(false)
@@ -237,7 +235,6 @@ export function NewIssueModal({
         setTitle("")
         setDescription("")
         setWorkflowStatusId("")
-        setIsBlocked(false)
         setPriority("medium")
         setAssigneeId("")
       }
@@ -269,7 +266,6 @@ export function NewIssueModal({
               title: title.trim(),
               description: descriptionToSend,
               workflow_status_id: workflowStatusId,
-              is_blocked: isBlocked,
               priority,
               assignee_id: assigneeId || null,
             }),
@@ -288,7 +284,6 @@ export function NewIssueModal({
       title,
       description,
       workflowStatusId,
-      isBlocked,
       priority,
       assigneeId,
       handleOpenChange,
@@ -399,17 +394,6 @@ export function NewIssueModal({
                 })}
               </SelectContent>
             </Select>
-
-            <div className="flex items-center gap-2">
-              <Checkbox
-                id="new-issue-blocked"
-                checked={isBlocked}
-                onCheckedChange={(v) => setIsBlocked(v === true)}
-              />
-              <Label htmlFor="new-issue-blocked" className="text-xs font-normal">
-                Blocked
-              </Label>
-            </div>
 
             <Select value={priority} onValueChange={setPriority}>
               <SelectTrigger

@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import { type Table } from "@tanstack/react-table"
-import { LayoutGrid, List, PlusIcon, X } from "lucide-react"
+import { Ban, LayoutGrid, Link2, List, PlusIcon, X } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -19,8 +19,10 @@ interface DataTableToolbarProps<TData> {
   facets?: IssueFacets | null
   view: "list" | "board"
   onViewChange: (view: "list" | "board") => void
-  blockedFilter?: boolean | undefined
-  onBlockedFilterChange?: (value: boolean | undefined) => void
+  boardHiddenColumns?: { id: string; label: string; issueCount: number }[]
+  onUnhideBoardColumn?: (columnId: string) => void
+  hideZeroCountBoardColumns?: boolean
+  onHideZeroCountBoardColumnsChange?: (value: boolean) => void
 }
 
 export function DataTableToolbar<TData>({
@@ -28,11 +30,12 @@ export function DataTableToolbar<TData>({
   facets = null,
   view,
   onViewChange,
-  blockedFilter,
-  onBlockedFilterChange,
+  boardHiddenColumns = [],
+  onUnhideBoardColumn,
+  hideZeroCountBoardColumns = false,
+  onHideZeroCountBoardColumnsChange,
 }: DataTableToolbarProps<TData>) {
-  const isFiltered =
-    table.getState().columnFilters.length > 0 || blockedFilter !== undefined
+  const isFiltered = table.getState().columnFilters.length > 0
   const newIssueModal = useNewIssueModal()
 
   const statusFilterOptions = React.useMemo(() => {
@@ -49,6 +52,22 @@ export function DataTableToolbar<TData>({
     return Object.fromEntries(
       facets.status.map((s) => [s.workflow_status_id, s.count])
     )
+  }, [facets])
+
+  const relationsFilterOptions = React.useMemo(
+    () => [
+      { value: "blocked", label: "Blocked", icon: Ban },
+      { value: "blocking", label: "Blocking", icon: Link2 },
+    ],
+    []
+  )
+
+  const relationsFacetCounts = React.useMemo(() => {
+    if (!facets?.relations) return undefined
+    return {
+      blocked: facets.relations.blocked,
+      blocking: facets.relations.blocking,
+    }
   }, [facets])
 
   return (
@@ -70,48 +89,13 @@ export function DataTableToolbar<TData>({
             facetCounts={statusFacetCounts}
           />
         )}
-        {onBlockedFilterChange && (
-          <div className="inline-flex items-center rounded-md border bg-background p-0.5">
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className={cn(
-                "h-7 px-2 text-xs",
-                blockedFilter === undefined &&
-                  "bg-muted text-foreground hover:bg-muted"
-              )}
-              onClick={() => onBlockedFilterChange(undefined)}
-            >
-              All
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className={cn(
-                "h-7 px-2 text-xs",
-                blockedFilter === true &&
-                  "bg-muted text-foreground hover:bg-muted"
-              )}
-              onClick={() => onBlockedFilterChange(true)}
-            >
-              Blocked
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className={cn(
-                "h-7 px-2 text-xs",
-                blockedFilter === false &&
-                  "bg-muted text-foreground hover:bg-muted"
-              )}
-              onClick={() => onBlockedFilterChange(false)}
-            >
-              Not blocked
-            </Button>
-          </div>
+        {table.getColumn("relations") && (
+          <DataTableFacetedFilter
+            column={table.getColumn("relations")}
+            title="Relations"
+            options={relationsFilterOptions}
+            facetCounts={relationsFacetCounts}
+          />
         )}
         {table.getColumn("priority") && (
           <DataTableFacetedFilter
@@ -125,10 +109,7 @@ export function DataTableToolbar<TData>({
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => {
-              table.resetColumnFilters()
-              onBlockedFilterChange?.(undefined)
-            }}
+            onClick={() => table.resetColumnFilters()}
           >
             Reset
             <X />
@@ -136,7 +117,16 @@ export function DataTableToolbar<TData>({
         )}
       </div>
       <div className="flex items-center gap-2">
-        <DataTableViewOptions table={table} />
+        <DataTableViewOptions
+          table={table}
+          view={view}
+          boardHiddenColumns={boardHiddenColumns}
+          onUnhideBoardColumn={onUnhideBoardColumn}
+          hideZeroCountBoardColumns={hideZeroCountBoardColumns}
+          onHideZeroCountBoardColumnsChange={
+            onHideZeroCountBoardColumnsChange
+          }
+        />
         <div className="inline-flex items-center rounded-md border bg-background p-0.5">
           <Button
             type="button"

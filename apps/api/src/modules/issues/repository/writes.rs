@@ -17,15 +17,6 @@ pub async fn set_issue_workflow_status(
     Ok(())
 }
 
-pub async fn set_issue_blocked(pool: &PgPool, issue_id: Uuid, is_blocked: bool) -> Result<(), sqlx::Error> {
-    sqlx::query(r#"UPDATE issues SET is_blocked = $1, updated_at = NOW() WHERE id = $2"#)
-        .bind(is_blocked)
-        .bind(issue_id)
-        .execute(pool)
-        .await?;
-    Ok(())
-}
-
 pub async fn update_issue_title_desc_priority(
     pool: &PgPool,
     issue_id: Uuid,

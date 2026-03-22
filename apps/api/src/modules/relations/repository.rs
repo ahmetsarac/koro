@@ -50,6 +50,7 @@ pub async fn insert_relation_added_event(
 
 #[derive(sqlx::FromRow)]
 pub struct RelationEdgeRow {
+    pub relation_id: Uuid,
     pub relation_type: String,
     pub other_project_key: String,
     pub other_key_seq: i32,
@@ -64,6 +65,7 @@ pub async fn list_outgoing_relations(
     sqlx::query_as::<_, RelationEdgeRow>(
         r#"
         SELECT
+          r.id as relation_id,
           r.relation_type,
           p.project_key as other_project_key,
           i.key_seq as other_key_seq,
@@ -88,6 +90,7 @@ pub async fn list_incoming_relations(
     sqlx::query_as::<_, RelationEdgeRow>(
         r#"
         SELECT
+          r.id as relation_id,
           r.relation_type,
           p.project_key as other_project_key,
           i.key_seq as other_key_seq,
