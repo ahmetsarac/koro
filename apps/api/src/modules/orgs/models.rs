@@ -19,3 +19,15 @@ pub struct CreateOrgResult {
     pub name: String,
     pub slug: String,
 }
+
+#[derive(Deserialize, ToSchema)]
+pub struct PatchOrgRequest {
+    pub name: String,
+}
+
+#[derive(Serialize, ToSchema)]
+pub struct PatchOrgResponse {
+    pub id: Uuid,
+    pub name: String,
+    pub slug: String,
+}

@@ -47,6 +47,26 @@ pub async fn insert_organization(
     Ok((row.id, row.name, row.slug))
 }
 
+pub async fn update_organization_name(
+    pool: &PgPool,
+    org_id: Uuid,
+    name: &str,
+) -> Result<Option<(Uuid, String, String)>, sqlx::Error> {
+    let row = sqlx::query!(
+        r#"
+        UPDATE organizations
+        SET name = $1
+        WHERE id = $2
+        RETURNING id, name, slug
+        "#,
+        name,
+        org_id
+    )
+    .fetch_optional(pool)
+    .await?;
+    Ok(row.map(|r| (r.id, r.name, r.slug)))
+}
+
 pub async fn insert_org_admin_member(
     tx: &mut Transaction<'_, Postgres>,
     org_id: Uuid,

@@ -17,7 +17,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar"
-import { ChevronsUpDownIcon, PlusIcon } from "lucide-react"
+import { ChevronsUpDownIcon, PlusIcon, Settings2 } from "lucide-react"
 
 interface Organization {
   id: string
@@ -91,6 +91,18 @@ export function OrganizationSwitcher({
                 <DropdownMenuShortcut>⌘{index + 1}</DropdownMenuShortcut>
               </DropdownMenuItem>
             ))}
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              className="gap-2 p-2"
+              onClick={() =>
+                router.push(`/${currentOrgSlug}/settings`)
+              }
+            >
+              <div className="flex size-6 items-center justify-center rounded-md border bg-transparent">
+                <Settings2 className="size-4" />
+              </div>
+              <span className="font-medium">Workspace settings</span>
+            </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem className="gap-2 p-2">
               <div className="flex size-6 items-center justify-center rounded-md border bg-transparent">

@@ -89,6 +89,7 @@ pub async fn health(State(state): State<AppState>) -> impl IntoResponse {
         users_handlers::get_me,
         users_handlers::setup,
         orgs_handlers::create_org,
+        orgs_handlers::patch_org,
         projects_handlers::list_projects,
         projects_handlers::get_project,
         projects_handlers::create_project,
@@ -136,6 +137,8 @@ pub async fn health(State(state): State<AppState>) -> impl IntoResponse {
         crate::modules::users::models::SetupResponse,
         crate::modules::orgs::models::CreateOrgRequest,
         crate::modules::orgs::models::CreateOrgResult,
+        crate::modules::orgs::models::PatchOrgRequest,
+        crate::modules::orgs::models::PatchOrgResponse,
         crate::modules::projects::models::ListMyProjectsQuery,
         crate::modules::projects::models::ProjectItem,
         crate::modules::projects::models::ListMyProjectsResponse,
@@ -227,6 +230,10 @@ pub fn router(state: AppState) -> Router {
         .route("/projects", get(projects_handlers::list_projects))
         .route("/setup", post(users_handlers::setup))
         .route("/orgs", post(orgs_handlers::create_org))
+        .route(
+            "/orgs/{orgSlug}",
+            patch(orgs_handlers::patch_org),
+        )
         .route("/orgs/{orgId}/invites", post(invites_handlers::create_invite))
         .route("/invites/{token}", get(invites_handlers::get_invite))
         .route("/invites/{token}/accept", post(invites_handlers::accept_invite))
