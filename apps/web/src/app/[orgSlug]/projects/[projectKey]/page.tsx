@@ -297,6 +297,7 @@ function ProjectIssuesTab({
 
   const [scrollTop, setScrollTop] = React.useState(0)
   const [containerHeight, setContainerHeight] = React.useState(0)
+  const [listBodyOverflows, setListBodyOverflows] = React.useState(false)
   const scrollContainerRef = React.useRef<HTMLDivElement>(null)
   const hasRestoredFromCacheRef = React.useRef(false)
   const pendingScrollTopRef = React.useRef<number | null>(null)
@@ -398,18 +399,6 @@ function ProjectIssuesTab({
     }
   }, [scrollTop, items, total, hasMore, orgSlug, projectKey, isInitialLoading])
 
-  React.useLayoutEffect(() => {
-    const container = scrollContainerRef.current
-    if (!container) return
-
-    const updateHeight = () => setContainerHeight(container.clientHeight)
-    updateHeight()
-
-    const observer = new ResizeObserver(updateHeight)
-    observer.observe(container)
-    return () => observer.disconnect()
-  }, [])
-
   const loadMore = React.useCallback(async () => {
     if (isFetchingMore || !hasMore) return
 
@@ -444,6 +433,28 @@ function ProjectIssuesTab({
   const topSpacerHeight = startIndex * ROW_HEIGHT
   const bottomSpacerHeight = Math.max(0, (items.length - endIndex) * ROW_HEIGHT)
 
+  const updateIssuesListScrollMetrics = React.useCallback(() => {
+    const container = scrollContainerRef.current
+    if (!container) return
+    setContainerHeight(container.clientHeight)
+    setListBodyOverflows(container.scrollHeight > container.clientHeight + 1)
+  }, [])
+
+  React.useLayoutEffect(() => {
+    const container = scrollContainerRef.current
+    if (!container) return
+
+    updateIssuesListScrollMetrics()
+    const observer = new ResizeObserver(updateIssuesListScrollMetrics)
+    observer.observe(container)
+    return () => observer.disconnect()
+  }, [
+    updateIssuesListScrollMetrics,
+    items.length,
+    topSpacerHeight,
+    bottomSpacerHeight,
+  ])
+
   const handleScroll = React.useCallback(
     (event: React.UIEvent<HTMLDivElement>) => {
       const el = event.currentTarget
@@ -470,6 +481,10 @@ function ProjectIssuesTab({
       <col style={{ width: COL_WIDTHS.status }} />
     </colgroup>
   )
+
+  const ISSUES_HEADER_HEIGHT = 41
+  const issuesListContentHeight =
+    ISSUES_HEADER_HEIGHT + items.length * ROW_HEIGHT
 
   if (isInitialLoading) {
     return (
@@ -500,88 +515,97 @@ function ProjectIssuesTab({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4">
-      <div className="relative flex max-h-full min-h-0 flex-1 flex-col rounded-md border overflow-hidden">
-        <table className="w-full text-xs" style={{ tableLayout: "fixed" }}>
-          {colGroup}
-          <TableHeader>
-            <TableRow className="border-none">
-              <TableHead className="bg-background shadow-[inset_0_-1px_0_0_var(--border)]">
-                Key
-              </TableHead>
-              <TableHead className="bg-background shadow-[inset_0_-1px_0_0_var(--border)]">
-                Title
-              </TableHead>
-              <TableHead className="bg-background shadow-[inset_0_-1px_0_0_var(--border)]">
-                Status
-              </TableHead>
-            </TableRow>
-          </TableHeader>
-        </table>
-
+      <div className="relative flex max-h-full min-h-0 flex-1 flex-col overflow-hidden">
         <div
-          ref={scrollContainerRef}
-          className="relative flex-1 overflow-y-auto min-h-0"
-          onScroll={handleScroll}
+          className="relative flex flex-col overflow-hidden rounded-md border"
+          style={{ height: `min(${issuesListContentHeight}px, 100%)` }}
         >
           <table className="w-full text-xs" style={{ tableLayout: "fixed" }}>
             {colGroup}
-            <TableBody>
-              {topSpacerHeight > 0 && (
-                <TableRow aria-hidden="true" className="hover:bg-transparent">
-                  <TableCell
-                    colSpan={3}
-                    className="p-0"
-                    style={{ height: topSpacerHeight }}
-                  />
-                </TableRow>
-              )}
-
-              {visibleItems.map((issue) => {
-                const status = statusConfig[issue.status] || {
-                  label: issue.status,
-                  icon: Circle,
-                }
-                const StatusIcon = status.icon
-
-                return (
-                  <TableRow key={issue.issue_id} style={{ height: ROW_HEIGHT }}>
-                    <TableCell className="font-mono text-xs">
-                      <Link
-                        href={`/${orgSlug}/issue/${issue.display_key}`}
-                        className="hover:underline"
-                      >
-                        {issue.display_key}
-                      </Link>
-                    </TableCell>
-                    <TableCell>
-                      <Link
-                        href={`/${orgSlug}/issue/${issue.display_key}`}
-                        className="hover:underline truncate block"
-                      >
-                        {issue.title}
-                      </Link>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        <StatusIcon className="h-4 w-4 text-muted-foreground" />
-                        <span>{status.label}</span>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                )
-              })}
-
-              {bottomSpacerHeight > 0 && (
-                <TableRow aria-hidden="true" className="hover:bg-transparent">
-                  <TableCell
-                    colSpan={3}
-                    className="p-0"
-                    style={{ height: bottomSpacerHeight }}
-                  />
-                </TableRow>
-              )}
-            </TableBody>
+            <TableHeader>
+              <TableRow className="border-none">
+                <TableHead className="bg-background shadow-[inset_0_-1px_0_0_var(--border)]">
+                  Key
+                </TableHead>
+                <TableHead className="bg-background shadow-[inset_0_-1px_0_0_var(--border)]">
+                  Title
+                </TableHead>
+                <TableHead className="bg-background shadow-[inset_0_-1px_0_0_var(--border)]">
+                  Status
+                </TableHead>
+              </TableRow>
+            </TableHeader>
           </table>
+
+          <div
+            ref={scrollContainerRef}
+            className={
+              listBodyOverflows
+                ? "relative min-h-0 flex-1 overflow-y-auto"
+                : "relative min-h-0 flex-1 overflow-y-hidden"
+            }
+            onScroll={handleScroll}
+          >
+            <table className="w-full text-xs" style={{ tableLayout: "fixed" }}>
+              {colGroup}
+              <TableBody>
+                {topSpacerHeight > 0 && (
+                  <TableRow aria-hidden="true" className="hover:bg-transparent">
+                    <TableCell
+                      colSpan={3}
+                      className="p-0"
+                      style={{ height: topSpacerHeight }}
+                    />
+                  </TableRow>
+                )}
+
+                {visibleItems.map((issue) => {
+                  const status = statusConfig[issue.status] || {
+                    label: issue.status,
+                    icon: Circle,
+                  }
+                  const StatusIcon = status.icon
+
+                  return (
+                    <TableRow key={issue.issue_id} style={{ height: ROW_HEIGHT }}>
+                      <TableCell className="font-mono text-xs">
+                        <Link
+                          href={`/${orgSlug}/issue/${issue.display_key}`}
+                          className="hover:underline"
+                        >
+                          {issue.display_key}
+                        </Link>
+                      </TableCell>
+                      <TableCell>
+                        <Link
+                          href={`/${orgSlug}/issue/${issue.display_key}`}
+                          className="hover:underline truncate block"
+                        >
+                          {issue.title}
+                        </Link>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <StatusIcon className="h-4 w-4 text-muted-foreground" />
+                          <span>{status.label}</span>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  )
+                })}
+
+                {bottomSpacerHeight > 0 && (
+                  <TableRow aria-hidden="true" className="hover:bg-transparent">
+                    <TableCell
+                      colSpan={3}
+                      className="p-0"
+                      style={{ height: bottomSpacerHeight }}
+                    />
+                  </TableRow>
+                )}
+              </TableBody>
+            </table>
+          </div>
         </div>
       </div>
 
@@ -633,6 +657,7 @@ function ProjectMembersTab({
 
   const [scrollTop, setScrollTop] = React.useState(0)
   const [containerHeight, setContainerHeight] = React.useState(0)
+  const [membersBodyOverflows, setMembersBodyOverflows] = React.useState(false)
   const scrollContainerRef = React.useRef<HTMLDivElement>(null)
 
   React.useEffect(() => {
@@ -665,18 +690,6 @@ function ProjectMembersTab({
     loadMembers()
   }, [orgSlug, projectKey])
 
-  React.useLayoutEffect(() => {
-    const container = scrollContainerRef.current
-    if (!container) return
-
-    const updateHeight = () => setContainerHeight(container.clientHeight)
-    updateHeight()
-
-    const observer = new ResizeObserver(updateHeight)
-    observer.observe(container)
-    return () => observer.disconnect()
-  }, [])
-
   const visibleCount =
     containerHeight > 0 ? Math.ceil(containerHeight / MEMBER_ROW_HEIGHT) : 12
 
@@ -695,6 +708,28 @@ function ProjectMembersTab({
     0,
     (members.length - endIndex) * MEMBER_ROW_HEIGHT
   )
+
+  const updateMembersScrollMetrics = React.useCallback(() => {
+    const container = scrollContainerRef.current
+    if (!container) return
+    setContainerHeight(container.clientHeight)
+    setMembersBodyOverflows(container.scrollHeight > container.clientHeight + 1)
+  }, [])
+
+  React.useLayoutEffect(() => {
+    const container = scrollContainerRef.current
+    if (!container) return
+
+    updateMembersScrollMetrics()
+    const observer = new ResizeObserver(updateMembersScrollMetrics)
+    observer.observe(container)
+    return () => observer.disconnect()
+  }, [
+    updateMembersScrollMetrics,
+    members.length,
+    topSpacerHeight,
+    bottomSpacerHeight,
+  ])
 
   const handleScroll = React.useCallback(
     (event: React.UIEvent<HTMLDivElement>) => {
@@ -745,7 +780,11 @@ function ProjectMembersTab({
 
         <div
           ref={scrollContainerRef}
-          className="relative flex-1 overflow-y-auto min-h-0"
+          className={
+            membersBodyOverflows
+              ? "relative min-h-0 flex-1 overflow-y-auto"
+              : "relative min-h-0 flex-1 overflow-y-hidden"
+          }
           onScroll={handleScroll}
         >
           {topSpacerHeight > 0 && (

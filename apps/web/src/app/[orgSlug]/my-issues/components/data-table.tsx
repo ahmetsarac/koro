@@ -163,6 +163,7 @@ export function DataTable({ orgSlug, columns, filterType }: DataTableProps) {
   const [sorting, setSorting] = React.useState<SortingState>([])
   const [scrollTop, setScrollTop] = React.useState(0)
   const [containerHeight, setContainerHeight] = React.useState(0)
+  const [listBodyOverflows, setListBodyOverflows] = React.useState(false)
   const [facets, setFacets] = React.useState<IssueFacets | null>(null)
   const [view, setViewState] = React.useState<"list" | "board">(initialView)
   const setView = React.useCallback((next: "list" | "board") => {
@@ -259,19 +260,6 @@ export function DataTable({ orgSlug, columns, filterType }: DataTableProps) {
       })
     }
   }, [scrollTop, items, nextCursor, total, hasMore, facets, filterType, isInitialLoading])
-
-  // Container yüksekliği
-  React.useLayoutEffect(() => {
-    const container = scrollContainerRef.current
-    if (!container) return
-
-    const updateHeight = () => setContainerHeight(container.clientHeight)
-    updateHeight()
-
-    const observer = new ResizeObserver(updateHeight)
-    observer.observe(container)
-    return () => observer.disconnect()
-  }, [])
 
   // Sonraki sayfa: cursor ile fetch, listeye ekle
   const loadMore = React.useCallback(async () => {
@@ -418,6 +406,32 @@ export function DataTable({ orgSlug, columns, filterType }: DataTableProps) {
   const topSpacerHeight = startIndex * ROW_HEIGHT
   const bottomSpacerHeight = Math.max(0, (rows.length - endIndex) * ROW_HEIGHT)
 
+  const updateListScrollMetrics = React.useCallback(() => {
+    const container = scrollContainerRef.current
+    if (!container) return
+    setContainerHeight(container.clientHeight)
+    setListBodyOverflows(container.scrollHeight > container.clientHeight + 1)
+  }, [])
+
+  React.useLayoutEffect(() => {
+    if (view !== "list") return
+    const container = scrollContainerRef.current
+    if (!container) return
+
+    updateListScrollMetrics()
+    const observer = new ResizeObserver(updateListScrollMetrics)
+    observer.observe(container)
+    return () => observer.disconnect()
+  }, [
+    view,
+    updateListScrollMetrics,
+    rows.length,
+    isInitialLoading,
+    error,
+    topSpacerHeight,
+    bottomSpacerHeight,
+  ])
+
   // Scroll: pozisyonu güncelle + dibe yakınsa loadMore
   const handleScroll = React.useCallback(
     (event: React.UIEvent<HTMLDivElement>) => {
@@ -445,6 +459,9 @@ export function DataTable({ orgSlug, columns, filterType }: DataTableProps) {
       ))}
     </colgroup>
   )
+
+  const HEADER_HEIGHT = 41
+  const listContentHeight = HEADER_HEIGHT + rows.length * ROW_HEIGHT
 
   const refetchIssues = React.useCallback(async () => {
     try {
@@ -525,9 +542,7 @@ export function DataTable({ orgSlug, columns, filterType }: DataTableProps) {
         onViewChange={setView}
       />
 
-      <div
-        className={`relative flex max-h-full min-h-0 flex-1 flex-col overflow-hidden ${view === "list" ? "rounded-md border" : ""}`}
-      >
+      <div className="relative flex max-h-full min-h-0 flex-1 flex-col overflow-hidden">
         {view === "list" ? (
           <>
             <DataTableSelectionOverlay
@@ -535,113 +550,122 @@ export function DataTable({ orgSlug, columns, filterType }: DataTableProps) {
               onClearSelection={() => table.resetRowSelection()}
             />
 
-            <table className="w-full text-xs" style={{ tableLayout: "fixed" }}>
-              {colGroup}
-              <TableHeader>
-                {table.getHeaderGroups().map((headerGroup) => (
-                  <TableRow key={headerGroup.id} className="border-none">
-                    {headerGroup.headers.map((header) => (
-                      <TableHead
-                        key={header.id}
-                        colSpan={header.colSpan}
-                        className="bg-background shadow-[inset_0_-1px_0_0_var(--border)]"
-                      >
-                        {header.isPlaceholder
-                          ? null
-                          : flexRender(
-                              header.column.columnDef.header,
-                              header.getContext()
-                            )}
-                      </TableHead>
-                    ))}
-                  </TableRow>
-                ))}
-              </TableHeader>
-            </table>
-
             <div
-              ref={scrollContainerRef}
-              className="relative flex-1 overflow-y-auto min-h-0"
-              onScroll={handleScroll}
+              className="relative flex flex-col overflow-hidden rounded-md border"
+              style={{ height: `min(${listContentHeight}px, 100%)` }}
             >
               <table className="w-full text-xs" style={{ tableLayout: "fixed" }}>
                 {colGroup}
-                <TableBody>
-                  {isInitialLoading ? (
-                    <TableRow>
-                      <TableCell
-                        colSpan={visibleColumnCount}
-                        className="h-24 text-center"
-                      >
-                        Loading issues...
-                      </TableCell>
-                    </TableRow>
-                  ) : error ? (
-                    <TableRow>
-                      <TableCell
-                        colSpan={visibleColumnCount}
-                        className="h-24 text-center text-destructive"
-                      >
-                        {error}
-                      </TableCell>
-                    </TableRow>
-                  ) : rows.length ? (
-                    <>
-                      {topSpacerHeight > 0 && (
-                        <TableRow
-                          aria-hidden="true"
-                          className="hover:bg-transparent"
+                <TableHeader>
+                  {table.getHeaderGroups().map((headerGroup) => (
+                    <TableRow key={headerGroup.id} className="border-none">
+                      {headerGroup.headers.map((header) => (
+                        <TableHead
+                          key={header.id}
+                          colSpan={header.colSpan}
+                          className="bg-background shadow-[inset_0_-1px_0_0_var(--border)]"
                         >
-                          <TableCell
-                            colSpan={visibleColumnCount}
-                            className="p-0"
-                            style={{ height: topSpacerHeight }}
-                          />
-                        </TableRow>
-                      )}
-
-                      {visibleRows.map((row) => (
-                        <TableRow
-                          key={row.id}
-                          data-state={row.getIsSelected() && "selected"}
-                          style={{ height: ROW_HEIGHT }}
-                        >
-                          {row.getVisibleCells().map((cell) => (
-                            <TableCell key={cell.id}>
-                              {flexRender(
-                                cell.column.columnDef.cell,
-                                cell.getContext()
+                          {header.isPlaceholder
+                            ? null
+                            : flexRender(
+                                header.column.columnDef.header,
+                                header.getContext()
                               )}
-                            </TableCell>
-                          ))}
-                        </TableRow>
+                        </TableHead>
                       ))}
-
-                      {bottomSpacerHeight > 0 && (
-                        <TableRow
-                          aria-hidden="true"
-                          className="hover:bg-transparent"
-                        >
-                          <TableCell
-                            colSpan={visibleColumnCount}
-                            className="p-0"
-                            style={{ height: bottomSpacerHeight }}
-                          />
-                        </TableRow>
-                      )}
-                    </>
-                  ) : (
-                    <TableRow>
-                      <TableCell
-                        colSpan={visibleColumnCount}
-                        className="h-24 text-center"
-                      >
-                        No results.
-                      </TableCell>
                     </TableRow>
-                  )}
-                </TableBody>
+                  ))}
+                </TableHeader>
               </table>
+
+              <div
+                ref={scrollContainerRef}
+                className={
+                  listBodyOverflows
+                    ? "relative min-h-0 flex-1 overflow-y-auto"
+                    : "relative min-h-0 flex-1 overflow-y-hidden"
+                }
+                onScroll={handleScroll}
+              >
+                <table className="w-full text-xs" style={{ tableLayout: "fixed" }}>
+                  {colGroup}
+                  <TableBody>
+                    {isInitialLoading ? (
+                      <TableRow>
+                        <TableCell
+                          colSpan={visibleColumnCount}
+                          className="h-24 text-center"
+                        >
+                          Loading issues...
+                        </TableCell>
+                      </TableRow>
+                    ) : error ? (
+                      <TableRow>
+                        <TableCell
+                          colSpan={visibleColumnCount}
+                          className="h-24 text-center text-destructive"
+                        >
+                          {error}
+                        </TableCell>
+                      </TableRow>
+                    ) : rows.length ? (
+                      <>
+                        {topSpacerHeight > 0 && (
+                          <TableRow
+                            aria-hidden="true"
+                            className="hover:bg-transparent"
+                          >
+                            <TableCell
+                              colSpan={visibleColumnCount}
+                              className="p-0"
+                              style={{ height: topSpacerHeight }}
+                            />
+                          </TableRow>
+                        )}
+
+                        {visibleRows.map((row) => (
+                          <TableRow
+                            key={row.id}
+                            data-state={row.getIsSelected() && "selected"}
+                            style={{ height: ROW_HEIGHT }}
+                          >
+                            {row.getVisibleCells().map((cell) => (
+                              <TableCell key={cell.id}>
+                                {flexRender(
+                                  cell.column.columnDef.cell,
+                                  cell.getContext()
+                                )}
+                              </TableCell>
+                            ))}
+                          </TableRow>
+                        ))}
+
+                        {bottomSpacerHeight > 0 && (
+                          <TableRow
+                            aria-hidden="true"
+                            className="hover:bg-transparent"
+                          >
+                            <TableCell
+                              colSpan={visibleColumnCount}
+                              className="p-0"
+                              style={{ height: bottomSpacerHeight }}
+                            />
+                          </TableRow>
+                        )}
+                      </>
+                    ) : (
+                      <TableRow>
+                        <TableCell
+                          colSpan={visibleColumnCount}
+                          className="h-24 text-center"
+                        >
+                          No results.
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </table>
+              </div>
             </div>
           </>
         ) : (
