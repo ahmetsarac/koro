@@ -1,8 +1,13 @@
 export function getApiBaseUrl() {
-  const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL
+  const apiBaseUrl =
+    typeof window === "undefined"
+      ? (process.env.API_URL ?? process.env.NEXT_PUBLIC_API_URL)
+      : process.env.NEXT_PUBLIC_API_URL
 
   if (!apiBaseUrl) {
-    throw new Error("NEXT_PUBLIC_API_URL is not configured.")
+    throw new Error(
+      "API base URL is not configured (set NEXT_PUBLIC_API_URL; for server-side in Docker also API_URL).",
+    )
   }
 
   return apiBaseUrl.replace(/\/$/, "")

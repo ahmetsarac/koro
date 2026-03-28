@@ -1,19 +1,24 @@
-# Varsayılan compose: çalışma zamanında konteynerler dış internete çıkabilir (normal bridge).
-# Sadece dış erişimi kapatmak için docker-compose.local.yml kullanın (internal: true).
+# Yerel / izole ortam: runtime'da internal: true — konteynerler birbirine erişir, dış internete çıkmaz.
+# Ana docker-compose.yml'de bu kısıt yoktur.
 #
-# API imajı derlenirken sqlx Postgres'e bağlanır. Sıra:
-#   1. docker compose up -d postgres
-#   2. db/migrations dosyalarını sırayla uygulayın (host'tan 5432)
-#   3. docker compose build
-#   4. docker compose up -d
+# Çevrimdışı imaj: postgres/minio için `docker load`; api/web için önceden build (internet varken).
 #
-# DATABASE_URL build arg: Docker Desktop için host.docker.internal; saf Linux'ta ek genelde gerekmez.
+# API build: önce postgres + migration, sonra build (ana docker-compose.yml ile aynı sıra).
+# Üçüncü parti imajlar: pull Policy never — yalnızca yerel cache / docker load.
+
+networks:
+  koro_local:
+    driver: bridge
+    internal: true
 
 services:
   postgres:
     image: postgres:16
-    container_name: koro-postgres
+    container_name: koro-postgres-local
     restart: unless-stopped
+    pull_policy: never
+    networks:
+      - koro_local
     environment:
       POSTGRES_USER: koro
       POSTGRES_PASSWORD: koro
@@ -21,7 +26,7 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      - koro_pgdata:/var/lib/postgresql/data
+      - koro_pgdata_local:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U koro -d koro"]
       interval: 5s
@@ -30,8 +35,11 @@ services:
 
   minio:
     image: minio/minio:latest
-    container_name: koro-minio
+    container_name: koro-minio-local
     restart: unless-stopped
+    pull_policy: never
+    networks:
+      - koro_local
     environment:
       MINIO_ROOT_USER: minioadmin
       MINIO_ROOT_PASSWORD: minioadmin
@@ -39,12 +47,15 @@ services:
       - "9000:9000"
       - "9001:9001"
     volumes:
-      - koro_minio:/data
+      - koro_minio_local:/data
     command: server /data --console-address ":9001"
 
   minio-init:
     image: minio/mc:latest
-    container_name: koro-minio-init
+    container_name: koro-minio-init-local
+    pull_policy: never
+    networks:
+      - koro_local
     depends_on:
       - minio
     entrypoint: >
@@ -56,7 +67,8 @@ services:
       "
 
   api:
-    image: koro-api:latest
+    image: koro-api:local
+    pull_policy: never
     build:
       context: ./apps/api
       dockerfile: Dockerfile
@@ -64,8 +76,10 @@ services:
         DATABASE_URL: postgres://koro:koro@host.docker.internal:5432/koro
       extra_hosts:
         - "host.docker.internal:host-gateway"
-    container_name: koro-api
+    container_name: koro-api-local
     restart: unless-stopped
+    networks:
+      - koro_local
     environment:
       DATABASE_URL: postgres://koro:koro@postgres:5432/koro
       JWT_SECRET: ${JWT_SECRET:-dev_secret}
@@ -83,14 +97,17 @@ services:
         condition: service_completed_successfully
 
   web:
-    image: koro-web:latest
+    image: koro-web:local
+    pull_policy: never
     build:
       context: ./apps/web
       dockerfile: Dockerfile
       args:
         NEXT_PUBLIC_API_URL: http://localhost:3001
-    container_name: koro-web
+    container_name: koro-web-local
     restart: unless-stopped
+    networks:
+      - koro_local
     environment:
       API_URL: http://api:3001
       NEXT_PUBLIC_API_URL: http://localhost:3001
@@ -100,5 +117,5 @@ services:
       - api
 
 volumes:
-  koro_pgdata:
-  koro_minio:
+  koro_pgdata_local:
+  koro_minio_local:
