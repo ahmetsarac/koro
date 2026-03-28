@@ -26,6 +26,7 @@ pub struct ProjectItem {
     pub member_count: i64,
     pub my_role: String,
     pub created_at: DateTime<Utc>,
+    pub viewed_at: Option<DateTime<Utc>>,
 }
 
 #[derive(Serialize, ToSchema)]
@@ -50,6 +51,7 @@ pub struct GetProjectResponse {
     pub member_count: i64,
     pub my_role: String,
     pub created_at: DateTime<Utc>,
+    pub viewed_at: Option<DateTime<Utc>>,
 }
 
 #[derive(Deserialize, ToSchema)]

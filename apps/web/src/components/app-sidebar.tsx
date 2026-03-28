@@ -89,12 +89,12 @@ export async function AppSidebar({ orgSlug, ...props }: AppSidebarProps) {
     })) ?? []
 
   const projects = sidebarProjects.map((project) => ({
-    name: project.name,
-    key: project.project_key,
-    url: `/${project.org_slug}/projects/${project.project_key}`,
-    icon: <Boxes className="size-4" />,
-    openIssueCount: project.issue_count,
-  }))
+      name: project.name,
+      key: project.project_key,
+      url: `/${project.org_slug}/projects/${project.project_key}`,
+      icon: <Boxes className="size-4" />,
+      openIssueCount: project.issue_count,
+    }))
 
   const user = me
     ? {

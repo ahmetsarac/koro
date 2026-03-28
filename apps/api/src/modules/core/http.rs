@@ -95,6 +95,7 @@ pub async fn health(State(state): State<AppState>) -> impl IntoResponse {
         projects_handlers::patch_project,
         projects_handlers::create_project,
         projects_handlers::list_project_members,
+        projects_handlers::record_project_view,
         invites_handlers::create_invite,
         invites_handlers::get_invite,
         invites_handlers::accept_invite,
@@ -252,6 +253,10 @@ pub fn router(state: AppState) -> Router {
         .route(
             "/orgs/{orgSlug}/projects/{projectKey}",
             get(projects_handlers::get_project).patch(projects_handlers::patch_project),
+        )
+        .route(
+            "/orgs/{orgSlug}/projects/{projectKey}/view",
+            post(projects_handlers::record_project_view),
         )
         .route(
             "/orgs/{orgSlug}/projects/{projectKey}/members",

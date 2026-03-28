@@ -47,6 +47,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { updateIssueInCaches } from "@/lib/cache/issues-cache"
 import { DescriptionEditor } from "@/components/issues/description-editor"
+import { RecordProjectView } from "@/components/record-project-view"
 import { cn } from "@/lib/utils"
 import { issueDetailHrefPreserveSource } from "@/lib/issue-nav"
 
@@ -743,6 +744,7 @@ function IssueDetailPage({
 
   return (
     <div className="flex h-[calc(100svh-4.5rem)] min-w-0 flex-col gap-6">
+      <RecordProjectView orgSlug={orgSlug} projectKey={projectKey} />
       <div className="flex min-w-0 items-center gap-3">
         <Button variant="ghost" size="icon" className="shrink-0 cursor-pointer" onClick={() => router.back()}>
           <ArrowLeft className="h-4 w-4" />

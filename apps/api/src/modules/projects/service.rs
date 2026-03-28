@@ -88,6 +88,7 @@ pub async fn list_projects(
             member_count: r.member_count,
             my_role: r.my_role,
             created_at: r.created_at,
+            viewed_at: r.viewed_at,
         })
         .collect();
 
@@ -136,7 +137,44 @@ pub async fn get_project(
         member_count: row.member_count,
         my_role: row.my_role,
         created_at: row.created_at,
+        viewed_at: row.viewed_at,
     })
+}
+
+pub async fn record_project_api_view(
+    pool: &PgPool,
+    user_id: Uuid,
+    org_slug: &str,
+    project_key: &str,
+) -> Result<(), AppError> {
+    let org_id = orgs_repo::find_org_id_by_slug(pool, org_slug)
+        .await
+        .map_err(|e| {
+            tracing::error!(?e, "record_project_view org resolve");
+            AppError::Internal
+        })?
+        .ok_or(AppError::NotFound)?;
+
+    let row = projects_repo::get_project_for_member(pool, user_id, org_id, project_key)
+        .await
+        .map_err(|e| {
+            tracing::error!(?e, "record_project_view query");
+            AppError::Internal
+        })?
+        .ok_or(AppError::NotFound)?;
+
+    let n = projects_repo::touch_member_project_viewed_at(pool, row.id, user_id)
+        .await
+        .map_err(|e| {
+            tracing::error!(?e, "record_project_view touch");
+            AppError::Internal
+        })?;
+
+    if n == 0 {
+        return Err(AppError::Forbidden);
+    }
+
+    Ok(())
 }
 
 pub async fn patch_project(

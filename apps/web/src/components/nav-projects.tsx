@@ -3,9 +3,10 @@
 import * as React from "react"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
-import { MoreHorizontalIcon, PlusIcon } from "lucide-react"
+import { ChevronDownIcon, ChevronUpIcon, PlusIcon } from "lucide-react"
 
 import { NewProjectModal } from "@/components/projects/new-project-modal"
+import { cn } from "@/lib/utils"
 import {
   SidebarGroup,
   SidebarGroupAction,
@@ -15,6 +16,9 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar"
+
+const NAV_PROJECTS_MENU_ID = "nav-projects-menu"
+const INITIAL_VISIBLE_PROJECTS = 3
 
 export function NavProjects({
   projects,
@@ -40,8 +44,18 @@ export function NavProjects({
         onOpenChange={setCreateProjectOpen}
         onSuccess={() => router.refresh()}
       />
-      <SidebarGroup className="group-data-[collapsible=icon]:hidden">
-        <div className="flex items-center">
+      <SidebarGroup
+        className={cn(
+          "group-data-[collapsible=icon]:hidden",
+          projects.length > 0 && "flex min-h-0 flex-1 flex-col"
+        )}
+      >
+        <div
+          className={cn(
+            "flex items-center",
+            projects.length > 0 && "shrink-0"
+          )}
+        >
           <SidebarGroupLabel className="flex-1">Projects</SidebarGroupLabel>
           {projects.length > 0 && (
             <SidebarGroupAction
@@ -107,13 +121,30 @@ function NavProjectsList({ projects }: { projects: {
   icon: React.ReactNode
   openIssueCount: number
 }[]}) {
+  const [expanded, setExpanded] = React.useState(false)
+  const showToggle = projects.length > INITIAL_VISIBLE_PROJECTS
+  const visibleProjects =
+    showToggle && !expanded
+      ? projects.slice(0, INITIAL_VISIBLE_PROJECTS)
+      : projects
+
   return (
-    <SidebarMenu>
-    {projects.map((project) => (
-      <NavProjectsItem key={project.name} project={project} />
-    ))}
-    <NavProjectsMore />
-    </SidebarMenu>
+    <div
+      id={NAV_PROJECTS_MENU_ID}
+      className="min-h-0 flex-1 overflow-y-auto overscroll-contain"
+    >
+      <SidebarMenu>
+        {visibleProjects.map((project) => (
+          <NavProjectsItem key={project.key} project={project} />
+        ))}
+        {showToggle ? (
+          <NavProjectsToggle
+            expanded={expanded}
+            onToggle={() => setExpanded((v) => !v)}
+          />
+        ) : null}
+      </SidebarMenu>
+    </div>
   )
 }
 
@@ -149,12 +180,28 @@ function NavProjectsItem({ project }: { project: {
   )
 }
 
-function NavProjectsMore() {
+function NavProjectsToggle({
+  expanded,
+  onToggle,
+}: {
+  expanded: boolean
+  onToggle: () => void
+}) {
   return (
     <SidebarMenuItem>
-      <SidebarMenuButton className="text-sidebar-foreground/60">
-        <MoreHorizontalIcon className="text-sidebar-foreground/60"/>
-        <span>More</span>
+      <SidebarMenuButton
+        type="button"
+        className="text-sidebar-foreground/60"
+        onClick={onToggle}
+        aria-expanded={expanded}
+        aria-controls={NAV_PROJECTS_MENU_ID}
+      >
+        {expanded ? (
+          <ChevronUpIcon className="text-sidebar-foreground/60" />
+        ) : (
+          <ChevronDownIcon className="text-sidebar-foreground/60" />
+        )}
+        <span>{expanded ? "Less" : "More"}</span>
       </SidebarMenuButton>
     </SidebarMenuItem>
   )

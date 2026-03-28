@@ -38,6 +38,7 @@ pub struct ProjectWithOrgRow {
     pub my_role: String,
     pub issue_count: i64,
     pub member_count: i64,
+    pub viewed_at: Option<DateTime<Utc>>,
 }
 
 pub async fn list_member_projects(
@@ -61,13 +62,14 @@ pub async fn list_member_projects(
             o.slug AS org_slug,
             pm.project_role AS my_role,
             (SELECT COUNT(*) FROM issues WHERE project_id = p.id) AS issue_count,
-            (SELECT COUNT(*) FROM project_members WHERE project_id = p.id) AS member_count
+            (SELECT COUNT(*) FROM project_members WHERE project_id = p.id) AS member_count,
+            pm.viewed_at AS viewed_at
         FROM projects p
         JOIN project_members pm ON pm.project_id = p.id AND pm.user_id = $1
         JOIN organizations o ON o.id = p.org_id
         WHERE (LOWER(p.name) LIKE $2 OR LOWER(p.project_key) LIKE $2)
           AND ($5::uuid IS NULL OR p.org_id = $5)
-        ORDER BY p.name ASC
+        ORDER BY pm.viewed_at DESC NULLS LAST, p.created_at DESC
         LIMIT $3 OFFSET $4
         "#,
     )
@@ -99,7 +101,8 @@ pub async fn get_project_for_member(
             o.slug AS org_slug,
             pm.project_role AS my_role,
             (SELECT COUNT(*) FROM issues WHERE project_id = p.id) AS issue_count,
-            (SELECT COUNT(*) FROM project_members WHERE project_id = p.id) AS member_count
+            (SELECT COUNT(*) FROM project_members WHERE project_id = p.id) AS member_count,
+            pm.viewed_at AS viewed_at
         FROM projects p
         JOIN project_members pm ON pm.project_id = p.id AND pm.user_id = $1
         JOIN organizations o ON o.id = p.org_id
@@ -166,6 +169,25 @@ pub async fn update_project_name(
     .bind(project_id)
     .fetch_one(pool)
     .await
+}
+
+pub async fn touch_member_project_viewed_at(
+    pool: &PgPool,
+    project_id: Uuid,
+    user_id: Uuid,
+) -> Result<u64, sqlx::Error> {
+    let res = sqlx::query(
+        r#"
+        UPDATE project_members
+        SET viewed_at = now()
+        WHERE project_id = $1 AND user_id = $2
+        "#,
+    )
+    .bind(project_id)
+    .bind(user_id)
+    .execute(pool)
+    .await?;
+    Ok(res.rows_affected())
 }
 
 pub async fn find_project_id_in_org(

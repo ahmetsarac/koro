@@ -12,6 +12,7 @@ export const projectSchema = z.object({
   member_count: z.number().int().nonnegative(),
   my_role: z.string(),
   created_at: z.string(),
+  viewed_at: z.string().datetime({ offset: true }).nullable().optional(),
 })
 
 export type Project = z.infer<typeof projectSchema>

@@ -65,6 +65,38 @@ pub async fn get_project(
 }
 
 #[utoipa::path(
+    post,
+    path = "/orgs/{orgSlug}/projects/{projectKey}/view",
+    tag = "projects",
+    security(("bearer_auth" = [])),
+    params(
+        ("orgSlug" = String, Path),
+        ("projectKey" = String, Path),
+    ),
+    responses(
+        (status = 204, description = "View recorded"),
+        (status = 401, description = "Unauthorized"),
+        (status = 403, description = "Forbidden"),
+        (status = 404, description = "Not found"),
+        (status = 500, description = "Server error"),
+    )
+)]
+pub async fn record_project_view(
+    Path((org_slug, project_key)): Path<(String, String)>,
+    State(state): State<AppState>,
+    AuthUser(user_id): AuthUser,
+) -> Result<StatusCode, AppError> {
+    projects_service::record_project_api_view(
+        &state.db,
+        user_id,
+        &org_slug,
+        &project_key,
+    )
+    .await?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+#[utoipa::path(
     patch,
     path = "/orgs/{orgSlug}/projects/{projectKey}",
     tag = "projects",
