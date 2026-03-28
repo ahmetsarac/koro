@@ -80,7 +80,7 @@ export function ProjectGeneralSettingsForm({
           Basic details for this project.
         </p>
       </div>
-      <form onSubmit={handleSave} className="max-w-md space-y-4">
+      <form onSubmit={handleSave} className="space-y-4">
         <div className="space-y-2">
           <Label htmlFor="project-settings-name">Project name</Label>
           <Input

@@ -27,7 +27,9 @@ export default async function ProjectSettingsLayout({
 
       <div className="flex min-h-0 flex-1 gap-8">
         <ProjectSettingsNav orgSlug={orgSlug} projectKey={projectKey} />
-        <div className="min-w-0 flex-1">{children}</div>
+        <div className="min-w-0 flex-1">
+          <div className="mx-auto w-full max-w-2xl">{children}</div>
+        </div>
       </div>
     </div>
   )
