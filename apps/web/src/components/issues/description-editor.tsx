@@ -70,7 +70,7 @@ export function DescriptionEditor({
       editorProps: {
         attributes: {
           class:
-            "min-h-[6rem] w-full resize-none rounded-md border-0 bg-transparent px-2 py-2 text-sm outline-none prose prose-sm dark:prose-invert max-w-none [&_img]:h-auto [&_img]:max-w-full",
+            "min-h-[6rem] w-full resize-none rounded-md border-0 bg-transparent px-2 py-2 text-sm outline-none prose prose-sm dark:prose-invert max-w-none [&_img]:my-3 [&_img]:block [&_img]:max-h-[min(70vh,28rem)] [&_img]:w-auto [&_img]:max-w-full [&_img]:object-contain [&_img]:h-auto",
         },
       },
       onUpdate: ({ editor }) => {

@@ -1190,7 +1190,7 @@ function IssueDetailPage({
             </div>
           ) : issue.description ? (
             <div
-              className="prose prose-sm dark:prose-invert max-w-none min-w-0 break-words [&_img]:h-auto [&_img]:max-w-full [&_pre]:max-w-full [&_pre]:overflow-x-auto [&_table]:block [&_table]:max-w-full [&_table]:overflow-x-auto [&_video]:max-w-full [&_ul]:my-2 [&_ol]:my-2 [&_li]:my-0.5 [&_p]:my-1 [&_p:first-child]:mt-0 [&_p:last-child]:mb-0"
+              className="prose prose-sm dark:prose-invert max-w-none min-w-0 break-words [&_img]:my-3 [&_img]:block [&_img]:max-h-[min(70vh,28rem)] [&_img]:w-auto [&_img]:max-w-full [&_img]:object-contain [&_img]:h-auto [&_pre]:max-w-full [&_pre]:overflow-x-auto [&_table]:block [&_table]:max-w-full [&_table]:overflow-x-auto [&_video]:max-w-full [&_ul]:my-2 [&_ol]:my-2 [&_li]:my-0.5 [&_p]:my-1 [&_p:first-child]:mt-0 [&_p:last-child]:mb-0"
               dangerouslySetInnerHTML={{ __html: issue.description }}
             />
           ) : (
