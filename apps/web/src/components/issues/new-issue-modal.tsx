@@ -131,13 +131,12 @@ export function NewIssueModal({
     let cancelled = false
     setProjectsLoading(true)
     setSelectedKey("")
-    fetchMyProjects({ limit: 100 })
+    fetchMyProjects({ orgSlug, limit: 100 })
       .then((res) => {
         if (cancelled) return
-        const forOrg = res.items.filter((p) => p.org_slug === orgSlug)
-        setProjects(forOrg)
-        if (forOrg.length > 0) {
-          setSelectedKey(forOrg[0].project_key)
+        setProjects(res.items)
+        if (res.items.length > 0) {
+          setSelectedKey(res.items[0].project_key)
         }
       })
       .finally(() => {

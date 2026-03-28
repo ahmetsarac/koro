@@ -16,6 +16,7 @@ export type IssueSortDir = "asc" | "desc"
 export type IssueFilterType = "assigned" | "created"
 
 export type FetchMyIssuesParams = {
+  orgSlug: string
   limit?: number
   offset?: number
   cursor?: string | null
@@ -31,6 +32,7 @@ export type FetchMyIssuesParams = {
 
 function buildSearchParams(params: FetchMyIssuesParams) {
   const searchParams = new URLSearchParams()
+  searchParams.set("org_slug", params.orgSlug)
 
   const arrayKeys = ["status", "priority", "relations"] as const
   for (const key of arrayKeys) {
@@ -41,8 +43,15 @@ function buildSearchParams(params: FetchMyIssuesParams) {
     if (joined) searchParams.set(key, joined)
   }
 
-  const { status: _s, priority: _p, relations: _r, cursor, offset, ...rest } =
-    params
+  const {
+    orgSlug: _orgSlug,
+    status: _s,
+    priority: _p,
+    relations: _r,
+    cursor,
+    offset,
+    ...rest
+  } = params
   if (cursor) {
     searchParams.set("cursor", cursor)
   } else if (offset !== undefined) {
@@ -58,7 +67,7 @@ function buildSearchParams(params: FetchMyIssuesParams) {
 }
 
 export async function fetchMyIssues(
-  params: FetchMyIssuesParams = {}
+  params: FetchMyIssuesParams
 ): Promise<IssueListResponse> {
   const searchParams = buildSearchParams(params)
   const query = searchParams.toString()

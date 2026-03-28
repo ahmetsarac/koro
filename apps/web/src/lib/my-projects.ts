@@ -4,6 +4,7 @@ import {
 } from "@/app/[orgSlug]/projects/data/schema"
 
 export type FetchMyProjectsParams = {
+  orgSlug: string
   limit?: number
   offset?: number
   q?: string
@@ -11,8 +12,10 @@ export type FetchMyProjectsParams = {
 
 function buildSearchParams(params: FetchMyProjectsParams) {
   const searchParams = new URLSearchParams()
+  searchParams.set("org_slug", params.orgSlug)
 
-  Object.entries(params).forEach(([key, value]) => {
+  const { orgSlug: _orgSlug, ...rest } = params
+  Object.entries(rest).forEach(([key, value]) => {
     if (value !== undefined && value !== "") {
       searchParams.set(key, String(value))
     }
@@ -22,7 +25,7 @@ function buildSearchParams(params: FetchMyProjectsParams) {
 }
 
 export async function fetchMyProjects(
-  params: FetchMyProjectsParams = {}
+  params: FetchMyProjectsParams
 ): Promise<ProjectListResponse> {
   const searchParams = buildSearchParams(params)
   const query = searchParams.toString()

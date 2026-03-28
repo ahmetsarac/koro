@@ -91,12 +91,14 @@ const COLUMN_TO_SORT_BY: Record<string, IssueSortBy> = {
 }
 
 function buildFetchParams(
+  orgSlug: string,
   sorting: SortingState,
   columnFilters: ColumnFiltersState,
   cursor: string | null,
   filterType: IssueFilterType
 ): FetchMyIssuesParams {
   const params: FetchMyIssuesParams = {
+    orgSlug,
     limit: PAGE_SIZE,
     filter_type: filterType,
     ...(cursor ? { cursor } : { offset: 0 }),
@@ -123,6 +125,31 @@ function buildFetchParams(
   }
 
   return params
+}
+
+function myIssuesEmptyCopy(
+  filterType: IssueFilterType,
+  hasActiveFilters: boolean
+): { title: string; description: string } {
+  if (hasActiveFilters) {
+    return {
+      title: "No matching issues",
+      description:
+        "Try adjusting search or column filters to see more results.",
+    }
+  }
+  if (filterType === "created") {
+    return {
+      title: "No issues created by you",
+      description:
+        "Issues you create in this organization will appear here.",
+    }
+  }
+  return {
+    title: "Nothing assigned to you",
+    description:
+      "When someone assigns you an issue in this organization, it will show up here.",
+  }
 }
 
 const WORKFLOW_CATEGORY_ORDER = [
@@ -303,7 +330,13 @@ export function DataTable({ orgSlug, columns, filterType }: DataTableProps) {
         setNextCursor(null)
         setHasMore(true)
 
-        const params = buildFetchParams(sorting, columnFilters, null, filterType)
+        const params = buildFetchParams(
+          orgSlug,
+          sorting,
+          columnFilters,
+          null,
+          filterType
+        )
         const res = await fetchMyIssues(params)
 
         if (cancelled) return
@@ -329,7 +362,7 @@ export function DataTable({ orgSlug, columns, filterType }: DataTableProps) {
       cancelled = true
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filterType])
+  }, [filterType, orgSlug])
 
   // Scroll pozisyonunu restore et
   React.useEffect(() => {
@@ -365,6 +398,7 @@ export function DataTable({ orgSlug, columns, filterType }: DataTableProps) {
       setIsFetchingMore(true)
 
       const params = buildFetchParams(
+        orgSlug,
         sorting,
         columnFilters,
         nextCursor,
@@ -382,6 +416,7 @@ export function DataTable({ orgSlug, columns, filterType }: DataTableProps) {
       setIsFetchingMore(false)
     }
   }, [
+    orgSlug,
     nextCursor,
     hasMore,
     isFetchingMore,
@@ -443,6 +478,7 @@ export function DataTable({ orgSlug, columns, filterType }: DataTableProps) {
           setError(null)
 
           const params = buildFetchParams(
+            orgSlug,
             sorting,
             columnFilters,
             null,
@@ -471,7 +507,7 @@ export function DataTable({ orgSlug, columns, filterType }: DataTableProps) {
         cancelled = true
       }
     }
-  }, [sorting, columnFilters, filterType])
+  }, [orgSlug, sorting, columnFilters, filterType])
 
   const rows = table.getRowModel().rows
   const selectedCount = table.getSelectedRowModel().rows.length
@@ -655,24 +691,42 @@ export function DataTable({ orgSlug, columns, filterType }: DataTableProps) {
   const HEADER_HEIGHT = 41
   const listContentHeight = HEADER_HEIGHT + rows.length * ROW_HEIGHT
 
-  const refetchIssues = React.useCallback(async () => {
-    try {
-      const params = buildFetchParams(
-        sorting,
-        columnFilters,
-        null,
-        filterType
-      )
-      const res = await fetchMyIssues(params)
-      setItems(res.items)
-      setTotal(res.total)
-      setNextCursor(res.next_cursor ?? null)
-      setHasMore(res.has_more)
-      setFacets(res.facets)
-    } catch {
-      // keep current state on refetch error
-    }
-  }, [sorting, columnFilters, filterType])
+  const hasActiveIssueFilters = columnFilters.some((f) => {
+    const v = f.value
+    if (v === undefined || v === "") return false
+    if (Array.isArray(v) && v.length === 0) return false
+    return true
+  })
+
+  const showListEmptyState =
+    view === "list" &&
+    !isInitialLoading &&
+    !error &&
+    rows.length === 0
+  const listEmptyCopy = myIssuesEmptyCopy(filterType, hasActiveIssueFilters)
+
+  const refetchIssues = React.useCallback(
+    async () => {
+      try {
+        const params = buildFetchParams(
+          orgSlug,
+          sorting,
+          columnFilters,
+          null,
+          filterType
+        )
+        const res = await fetchMyIssues(params)
+        setItems(res.items)
+        setTotal(res.total)
+        setNextCursor(res.next_cursor ?? null)
+        setHasMore(res.has_more)
+        setFacets(res.facets)
+      } catch {
+        // keep current state on refetch error
+      }
+    },
+    [orgSlug, sorting, columnFilters, filterType]
+  )
 
   const handleBoardMove = React.useCallback(
     async ({
@@ -776,7 +830,7 @@ export function DataTable({ orgSlug, columns, filterType }: DataTableProps) {
             />
 
             <div
-              className="relative flex flex-col overflow-hidden rounded-md border"
+              className={`relative flex flex-col overflow-hidden rounded-md border${showListEmptyState ? " min-h-[140px]" : ""}`}
               style={{ height: `min(${listContentHeight}px, 100%)` }}
             >
               <table className="w-full text-xs" style={{ tableLayout: "fixed" }}>
@@ -879,12 +933,19 @@ export function DataTable({ orgSlug, columns, filterType }: DataTableProps) {
                         )}
                       </>
                     ) : (
-                      <TableRow>
+                      <TableRow className="hover:bg-transparent">
                         <TableCell
                           colSpan={visibleColumnCount}
-                          className="h-24 text-center"
+                          className="h-auto min-h-[120px] align-middle px-6 py-6"
                         >
-                          No results.
+                          <div className="flex flex-col items-center justify-center gap-1.5 text-center">
+                            <p className="text-sm font-medium text-foreground">
+                              {listEmptyCopy.title}
+                            </p>
+                            <p className="max-w-sm text-xs text-muted-foreground">
+                              {listEmptyCopy.description}
+                            </p>
+                          </div>
                         </TableCell>
                       </TableRow>
                     )}
@@ -897,13 +958,23 @@ export function DataTable({ orgSlug, columns, filterType }: DataTableProps) {
           !error &&
           visibleBoardColumns.length === 0 &&
           allBoardColumns.length > 0 ? (
-          <div className="flex min-h-[200px] flex-1 items-center justify-center rounded-md border border-dashed px-4 text-center text-sm text-muted-foreground">
-            No columns to show. Use <strong>Columns</strong> next to View to show
-            hidden or empty columns again.
+          <div className="flex min-h-[140px] flex-1 flex-col items-center justify-center gap-1.5 rounded-md border border-dashed px-5 py-6 text-center">
+            <p className="text-sm font-medium text-foreground">
+              No board columns visible
+            </p>
+            <p className="max-w-md text-xs text-muted-foreground">
+              Use <strong className="text-foreground">Columns</strong> next to
+              View to show hidden or zero-count columns again.
+            </p>
           </div>
         ) : !isInitialLoading && !error && allBoardColumns.length === 0 ? (
-          <div className="flex min-h-[200px] flex-1 items-center justify-center rounded-md border border-dashed px-4 text-center text-sm text-muted-foreground">
-            No workflow columns match the current filters (no issues in scope).
+          <div className="flex min-h-[140px] flex-1 flex-col items-center justify-center gap-1.5 rounded-md border border-dashed px-5 py-6 text-center">
+            <p className="text-sm font-medium text-foreground">
+              {listEmptyCopy.title}
+            </p>
+            <p className="max-w-md text-xs text-muted-foreground">
+              {listEmptyCopy.description}
+            </p>
           </div>
         ) : (
           <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
@@ -912,7 +983,13 @@ export function DataTable({ orgSlug, columns, filterType }: DataTableProps) {
               itemsByColumn={visibleBoardItems}
               isLoading={isInitialLoading}
               error={error}
-              emptyMessage="No issues"
+              emptyMessage={
+                hasActiveIssueFilters
+                  ? "No issues match filters"
+                  : filterType === "created"
+                    ? "No issues created by you"
+                    : "Nothing assigned to you"
+              }
               getIssueId={(issue) => issue.id}
               getIssueKey={(issue) => issue.display_key}
               getIssueTitle={(issue) => issue.title}

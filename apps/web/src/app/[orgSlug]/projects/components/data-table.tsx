@@ -28,6 +28,24 @@ const OVERSCAN = 2
 const PAGE_SIZE = 50
 const LOAD_MORE_THRESHOLD = 300
 
+function projectsEmptyCopy(searchQuery: string): {
+  title: string
+  description: string
+} {
+  if (searchQuery.trim()) {
+    return {
+      title: "No projects match your search",
+      description:
+        "Try another name or project key, or clear the search box.",
+    }
+  }
+  return {
+    title: "No projects yet",
+    description:
+      "Create a project to start tracking issues in this organization.",
+  }
+}
+
 function useDebounce<T>(value: T, delay: number): T {
   const [debouncedValue, setDebouncedValue] = React.useState<T>(value)
 
@@ -81,6 +99,7 @@ export function DataTable({ columns, orgSlug }: DataTableProps) {
         setError(null)
 
         const params: FetchMyProjectsParams = {
+          orgSlug,
           limit: PAGE_SIZE,
           offset: 0,
           ...(debouncedSearch && { q: debouncedSearch }),
@@ -107,7 +126,7 @@ export function DataTable({ columns, orgSlug }: DataTableProps) {
     return () => {
       cancelled = true
     }
-  }, [debouncedSearch, listRefreshKey])
+  }, [debouncedSearch, listRefreshKey, orgSlug])
 
   React.useLayoutEffect(() => {
     const container = scrollContainerRef.current
@@ -128,6 +147,7 @@ export function DataTable({ columns, orgSlug }: DataTableProps) {
       setIsFetchingMore(true)
 
       const params: FetchMyProjectsParams = {
+        orgSlug,
         limit: PAGE_SIZE,
         offset: items.length,
         ...(debouncedSearch && { q: debouncedSearch }),
@@ -142,7 +162,7 @@ export function DataTable({ columns, orgSlug }: DataTableProps) {
     } finally {
       setIsFetchingMore(false)
     }
-  }, [items.length, hasMore, isFetchingMore, debouncedSearch])
+  }, [orgSlug, items.length, hasMore, isFetchingMore, debouncedSearch])
 
   const table = useReactTable({
     data: items,
@@ -204,6 +224,10 @@ export function DataTable({ columns, orgSlug }: DataTableProps) {
   const HEADER_HEIGHT = 41
   const contentHeight = HEADER_HEIGHT + rows.length * ROW_HEIGHT
 
+  const showProjectsEmpty =
+    !isInitialLoading && !error && rows.length === 0
+  const projectsEmpty = projectsEmptyCopy(debouncedSearch)
+
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4">
       <NewProjectModal
@@ -223,7 +247,7 @@ export function DataTable({ columns, orgSlug }: DataTableProps) {
       />
 
       <div
-        className="relative flex flex-col rounded-md border overflow-hidden"
+        className={`relative flex flex-col overflow-hidden rounded-md border${showProjectsEmpty ? " min-h-[140px]" : ""}`}
         style={{ height: `min(${contentHeight}px, 100%)` }}
       >
         <table className="w-full text-xs" style={{ tableLayout: "fixed" }}>
@@ -321,12 +345,19 @@ export function DataTable({ columns, orgSlug }: DataTableProps) {
                   )}
                 </>
               ) : (
-                <TableRow>
+                <TableRow className="hover:bg-transparent">
                   <TableCell
                     colSpan={visibleColumnCount}
-                    className="h-24 text-center"
+                    className="h-auto min-h-[120px] align-middle px-6 py-6"
                   >
-                    No projects found.
+                    <div className="flex flex-col items-center justify-center gap-1.5 text-center">
+                      <p className="text-sm font-medium text-foreground">
+                        {projectsEmpty.title}
+                      </p>
+                      <p className="max-w-sm text-xs text-muted-foreground">
+                        {projectsEmpty.description}
+                      </p>
+                    </div>
                   </TableCell>
                 </TableRow>
               )}

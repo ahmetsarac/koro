@@ -6,6 +6,7 @@ pub async fn count_member_projects(
     pool: &PgPool,
     user_id: Uuid,
     search_pattern: &str,
+    filter_org_id: Option<Uuid>,
 ) -> Result<i64, sqlx::Error> {
     sqlx::query_scalar::<_, i64>(
         r#"
@@ -14,10 +15,12 @@ pub async fn count_member_projects(
         JOIN project_members pm ON pm.project_id = p.id
         WHERE pm.user_id = $1
           AND (LOWER(p.name) LIKE $2 OR LOWER(p.project_key) LIKE $2)
+          AND ($3::uuid IS NULL OR p.org_id = $3)
         "#,
     )
     .bind(user_id)
     .bind(search_pattern)
+    .bind(filter_org_id)
     .fetch_one(pool)
     .await
 }
@@ -41,6 +44,7 @@ pub async fn list_member_projects(
     pool: &PgPool,
     user_id: Uuid,
     search_pattern: &str,
+    filter_org_id: Option<Uuid>,
     limit: i64,
     offset: i64,
 ) -> Result<Vec<ProjectWithOrgRow>, sqlx::Error> {
@@ -62,6 +66,7 @@ pub async fn list_member_projects(
         JOIN project_members pm ON pm.project_id = p.id AND pm.user_id = $1
         JOIN organizations o ON o.id = p.org_id
         WHERE (LOWER(p.name) LIKE $2 OR LOWER(p.project_key) LIKE $2)
+          AND ($5::uuid IS NULL OR p.org_id = $5)
         ORDER BY p.name ASC
         LIMIT $3 OFFSET $4
         "#,
@@ -70,6 +75,7 @@ pub async fn list_member_projects(
     .bind(search_pattern)
     .bind(limit)
     .bind(offset)
+    .bind(filter_org_id)
     .fetch_all(pool)
     .await
 }

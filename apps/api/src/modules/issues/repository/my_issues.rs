@@ -170,6 +170,20 @@ fn apply_my_issues_filters(
     }
 }
 
+/// Restrict `issues i` rows to a single organization (via `i.project_id`).
+fn push_org_scope_for_issue_i(
+    builder: &mut QueryBuilder<Postgres>,
+    org_scope: Option<uuid::Uuid>,
+) {
+    if let Some(org_id) = org_scope {
+        builder.push(
+            " AND EXISTS (SELECT 1 FROM projects proj_scope WHERE proj_scope.id = i.project_id AND proj_scope.org_id = ",
+        );
+        builder.push_bind(org_id);
+        builder.push(")");
+    }
+}
+
 pub fn apply_my_issues_cursor_filter(
     builder: &mut QueryBuilder<Postgres>,
     sort_by: MyIssueSortBy,
@@ -268,6 +282,7 @@ pub async fn fetch_facets(
     pool: &PgPool,
     user_id: uuid::Uuid,
     query: &ListMyIssuesQuery,
+    org_scope: Option<uuid::Uuid>,
 ) -> Result<MyIssueFacets, sqlx::Error> {
     let mut facets = MyIssueFacets::default();
     let filter_type = query.filter_type.as_deref();
@@ -279,6 +294,7 @@ pub async fn fetch_facets(
     );
     push_my_issues_user_filter(&mut project_qb, user_id, filter_type);
     apply_my_issues_filters(&mut project_qb, query, Some("status"));
+    push_org_scope_for_issue_i(&mut project_qb, org_scope);
     let project_ids: Vec<uuid::Uuid> = project_qb
         .build_query_scalar::<uuid::Uuid>()
         .fetch_all(pool)
@@ -320,6 +336,7 @@ pub async fn fetch_facets(
         );
         push_my_issues_user_filter(&mut count_qb, user_id, filter_type);
         apply_my_issues_filters(&mut count_qb, query, None);
+        push_org_scope_for_issue_i(&mut count_qb, org_scope);
         count_qb.push(" GROUP BY i.workflow_status_id");
         let count_rows: Vec<StatusCountRow> = count_qb
             .build_query_as::<StatusCountRow>()
@@ -349,6 +366,7 @@ pub async fn fetch_facets(
     );
     push_my_issues_user_filter(&mut priority_builder, user_id, filter_type);
     apply_my_issues_filters(&mut priority_builder, query, Some("priority"));
+    push_org_scope_for_issue_i(&mut priority_builder, org_scope);
     priority_builder.push(" GROUP BY i.priority");
     let rows: Vec<FacetRowStr> = priority_builder
         .build_query_as::<FacetRowStr>()
@@ -362,6 +380,7 @@ pub async fn fetch_facets(
         QueryBuilder::<Postgres>::new("SELECT COUNT(*)::bigint FROM issues i WHERE ");
     push_my_issues_user_filter(&mut rel_blocked_qb, user_id, filter_type);
     apply_my_issues_filters(&mut rel_blocked_qb, query, Some("relations"));
+    push_org_scope_for_issue_i(&mut rel_blocked_qb, org_scope);
     rel_blocked_qb.push(
         " AND EXISTS (SELECT 1 FROM issue_relations ir WHERE ir.target_issue_id = i.id AND ir.relation_type = 'blocks')",
     );
@@ -374,6 +393,7 @@ pub async fn fetch_facets(
         QueryBuilder::<Postgres>::new("SELECT COUNT(*)::bigint FROM issues i WHERE ");
     push_my_issues_user_filter(&mut rel_blocking_qb, user_id, filter_type);
     apply_my_issues_filters(&mut rel_blocking_qb, query, Some("relations"));
+    push_org_scope_for_issue_i(&mut rel_blocking_qb, org_scope);
     rel_blocking_qb.push(
         " AND EXISTS (SELECT 1 FROM issue_relations ir WHERE ir.source_issue_id = i.id AND ir.relation_type = 'blocks')",
     );
@@ -389,11 +409,13 @@ pub async fn count_filtered(
     pool: &PgPool,
     user_id: uuid::Uuid,
     query: &ListMyIssuesQuery,
+    org_scope: Option<uuid::Uuid>,
 ) -> Result<i64, sqlx::Error> {
     let filter_type = query.filter_type.as_deref();
     let mut count_query = QueryBuilder::<Postgres>::new("SELECT COUNT(*) FROM issues i WHERE ");
     push_my_issues_user_filter(&mut count_query, user_id, filter_type);
     apply_my_issues_filters(&mut count_query, query, None);
+    push_org_scope_for_issue_i(&mut count_query, org_scope);
     count_query.build_query_scalar::<i64>().fetch_one(pool).await
 }
 
@@ -402,6 +424,7 @@ pub async fn fetch_item_rows(
     pool: &PgPool,
     user_id: uuid::Uuid,
     query: &ListMyIssuesQuery,
+    org_scope: Option<uuid::Uuid>,
     sort_by: MyIssueSortBy,
     sort_dir: SortDirection,
     limit_plus_one: i64,
@@ -425,6 +448,10 @@ pub async fn fetch_item_rows(
     );
     push_my_issues_user_filter(&mut items_query, user_id, filter_type);
     apply_my_issues_filters(&mut items_query, query, None);
+    if let Some(org_id) = org_scope {
+        items_query.push(" AND p.org_id = ");
+        items_query.push_bind(org_id);
+    }
 
     if let Some(cursor) = decoded_cursor {
         if let Err(msg) = apply_my_issues_cursor_filter(&mut items_query, sort_by, sort_dir, cursor) {

@@ -24,17 +24,47 @@ pub async fn list_projects(
         format!("%{}%", search.to_lowercase())
     };
 
-    let total = projects_repo::count_member_projects(pool, user_id, &search_pattern)
-        .await
-        .map_err(|e| {
-            tracing::error!(?e, "list_my_projects count");
-            AppError::Internal
-        })?;
+    let filter_org_id =
+        match query.org_slug.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
+            Some(slug) => {
+                let org_id = orgs_repo::find_org_id_by_slug(pool, slug)
+                    .await
+                    .map_err(|e| {
+                        tracing::error!(?e, "list_projects find_org");
+                        AppError::Internal
+                    })?
+                    .ok_or(AppError::NotFound)?;
+                let is_member = orgs_repo::is_org_member(pool, org_id, user_id)
+                    .await
+                    .map_err(|e| {
+                        tracing::error!(?e, "list_projects is_org_member");
+                        AppError::Internal
+                    })?;
+                if !is_member {
+                    return Err(AppError::Forbidden);
+                }
+                Some(org_id)
+            }
+            None => None,
+        };
+
+    let total = projects_repo::count_member_projects(
+        pool,
+        user_id,
+        &search_pattern,
+        filter_org_id,
+    )
+    .await
+    .map_err(|e| {
+        tracing::error!(?e, "list_my_projects count");
+        AppError::Internal
+    })?;
 
     let rows = projects_repo::list_member_projects(
         pool,
         user_id,
         &search_pattern,
+        filter_org_id,
         limit as i64,
         offset as i64,
     )

@@ -100,6 +100,8 @@ pub struct ListMyIssuesQuery {
     pub filter_type: Option<String>,
     /// Comma-separated: `blocked` (incoming `blocks` relation), `blocking` (outgoing). OR within the set when both present.
     pub relations: Option<String>,
+    /// When set, only issues in projects belonging to this organization (user must be an org member).
+    pub org_slug: Option<String>,
 }
 
 /// Parse `PROJECTKEY-123` into project key prefix and numeric sequence.

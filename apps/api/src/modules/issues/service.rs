@@ -198,7 +198,30 @@ pub async fn list_my_issues(
         None => None,
     };
 
-    let total = match issues_repo::count_filtered(pool, user_id, &query).await {
+    let org_scope =
+        match query.org_slug.as_deref().map(str::trim).filter(|s| !s.is_empty()) {
+            Some(slug) => {
+                let org_id = match orgs_repo::find_org_id_by_slug(pool, slug).await {
+                    Ok(Some(id)) => id,
+                    Ok(None) => return StatusCode::NOT_FOUND.into_response(),
+                    Err(e) => {
+                        tracing::error!(?e, "list_my_issues find_org");
+                        return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+                    }
+                };
+                match orgs_repo::is_org_member(pool, org_id, user_id).await {
+                    Ok(true) => Some(org_id),
+                    Ok(false) => return StatusCode::FORBIDDEN.into_response(),
+                    Err(e) => {
+                        tracing::error!(?e, "list_my_issues is_org_member");
+                        return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+                    }
+                }
+            }
+            None => None,
+        };
+
+    let total = match issues_repo::count_filtered(pool, user_id, &query, org_scope).await {
         Ok(total) => total,
         Err(error) => {
             eprintln!("list_my_issues count error: {error:?}");
@@ -206,7 +229,7 @@ pub async fn list_my_issues(
         }
     };
 
-    let facets_raw = match issues_repo::fetch_facets(pool, user_id, &query).await {
+    let facets_raw = match issues_repo::fetch_facets(pool, user_id, &query, org_scope).await {
         Ok(f) => f,
         Err(error) => {
             eprintln!("list_my_issues facet count error: {error:?}");
@@ -218,6 +241,7 @@ pub async fn list_my_issues(
         pool,
         user_id,
         &query,
+        org_scope,
         sort_by,
         sort_dir,
         limit + 1,

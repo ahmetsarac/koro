@@ -13,16 +13,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
-
-function slugFromName(name: string) {
-  return name
-    .trim()
-    .toLowerCase()
-    .replace(/\s+/g, "-")
-    .replace(/[^a-z0-9-]/g, "")
-    .replace(/-+/g, "-")
-    .replace(/^-|-$/g, "") || "my-org"
-}
+import { slugFromName } from "@/lib/org-slug"
 
 export function OnboardingFlow() {
   const router = useRouter()

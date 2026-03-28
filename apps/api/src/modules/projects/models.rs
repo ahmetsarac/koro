@@ -9,6 +9,8 @@ pub struct ListMyProjectsQuery {
     pub limit: Option<i32>,
     pub offset: Option<i32>,
     pub q: Option<String>,
+    /// When set, only projects in this organization (user must be an org member).
+    pub org_slug: Option<String>,
 }
 
 #[derive(Serialize, ToSchema)]
