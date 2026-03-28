@@ -80,6 +80,14 @@ pub struct PatchProjectResponse {
     pub name: String,
 }
 
+#[derive(Deserialize, ToSchema)]
+pub struct DeleteProjectRequest {
+    /// Must match the project `name` exactly (after trim).
+    pub confirm_name: String,
+    /// Must match the project key (case-insensitive).
+    pub confirm_project_key: String,
+}
+
 #[derive(Serialize, ToSchema)]
 pub struct ProjectMemberItem {
     pub user_id: Uuid,

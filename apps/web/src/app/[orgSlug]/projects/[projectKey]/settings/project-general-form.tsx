@@ -8,6 +8,8 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 
+import { ProjectDeleteSection } from "./project-delete-section"
+
 const patchResponseSchema = z.object({
   id: z.string().uuid(),
   project_key: z.string(),
@@ -107,6 +109,12 @@ export function ProjectGeneralSettingsForm({
           </Button>
         )}
       </form>
+      <ProjectDeleteSection
+        orgSlug={orgSlug}
+        projectKey={projectKey}
+        projectName={initialName}
+        canDelete={canEdit}
+      />
     </section>
   )
 }

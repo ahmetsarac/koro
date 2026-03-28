@@ -92,3 +92,63 @@ export async function PATCH(
     )
   }
 }
+
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ orgSlug: string; projectKey: string }> }
+) {
+  try {
+    const { orgSlug, projectKey } = await params
+    const accessToken = request.cookies.get(ACCESS_TOKEN_COOKIE_NAME)?.value
+    if (!accessToken) {
+      return NextResponse.json({ message: "Unauthorized" }, { status: 401 })
+    }
+
+    const body = (await request.json()) as {
+      confirm_name?: string
+      confirm_project_key?: string
+    }
+    const confirm_name =
+      typeof body?.confirm_name === "string" ? body.confirm_name.trim() : ""
+    const confirm_project_key =
+      typeof body?.confirm_project_key === "string"
+        ? body.confirm_project_key.trim()
+        : ""
+    if (!confirm_name || !confirm_project_key) {
+      return NextResponse.json(
+        { message: "confirm_name and confirm_project_key are required" },
+        { status: 400 }
+      )
+    }
+
+    const response = await fetch(
+      `${getApiBaseUrl()}/orgs/${orgSlug}/projects/${projectKey}`,
+      {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({
+          confirm_name,
+          confirm_project_key,
+        }),
+      }
+    )
+
+    if (!response.ok) {
+      const text = (await response.text()).trim()
+      const message =
+        text.length > 0 ? text : "Failed to delete project"
+      return NextResponse.json({ message }, { status: response.status })
+    }
+
+    return new NextResponse(null, { status: 204 })
+  } catch (error) {
+    console.error("Failed to delete project", error)
+    return NextResponse.json(
+      { message: "Failed to delete project" },
+      { status: 500 }
+    )
+  }
+}

@@ -204,6 +204,14 @@ pub async fn find_project_id_in_org(
     .await
 }
 
+pub async fn delete_project_by_id(pool: &PgPool, project_id: Uuid) -> Result<u64, sqlx::Error> {
+    let res = sqlx::query("DELETE FROM projects WHERE id = $1")
+        .bind(project_id)
+        .execute(pool)
+        .await?;
+    Ok(res.rows_affected())
+}
+
 #[derive(sqlx::FromRow)]
 pub struct ProjectMemberRow {
     pub user_id: Uuid,

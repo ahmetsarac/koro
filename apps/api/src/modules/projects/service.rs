@@ -233,6 +233,64 @@ pub async fn patch_project(
     })
 }
 
+pub async fn delete_project(
+    pool: &PgPool,
+    user_id: Uuid,
+    org_slug: &str,
+    project_key: &str,
+    req: DeleteProjectRequest,
+) -> Result<(), AppError> {
+    let org_id = orgs_repo::find_org_id_by_slug(pool, org_slug)
+        .await
+        .map_err(|e| {
+            tracing::error!(?e, "delete_project org resolve");
+            AppError::Internal
+        })?
+        .ok_or(AppError::NotFound)?;
+
+    let row = projects_repo::get_project_for_member(pool, user_id, org_id, project_key)
+        .await
+        .map_err(|e| {
+            tracing::error!(?e, "delete_project membership");
+            AppError::Internal
+        })?
+        .ok_or(AppError::NotFound)?;
+
+    let project_id = row.id;
+
+    let can = crate::modules::issues::repository::user_can_manage_workflow_statuses(
+        pool, project_id, user_id,
+    )
+    .await
+    .map_err(|e| {
+        tracing::error!(?e, "delete_project permission");
+        AppError::Internal
+    })?;
+    if !can {
+        return Err(AppError::Forbidden);
+    }
+
+    let confirm_name = req.confirm_name.trim();
+    let confirm_key = req.confirm_project_key.trim().to_uppercase();
+    if confirm_name != row.name.trim() || confirm_key != row.project_key.to_uppercase() {
+        return Err(AppError::BadRequest(Some(
+            "confirmation does not match project name or key",
+        )));
+    }
+
+    let n = projects_repo::delete_project_by_id(pool, project_id)
+        .await
+        .map_err(|e| {
+            tracing::error!(?e, "delete_project execute");
+            AppError::Internal
+        })?;
+    if n == 0 {
+        return Err(AppError::NotFound);
+    }
+
+    Ok(())
+}
+
 pub async fn create_project(
     pool: &PgPool,
     org_id: Uuid,

@@ -93,6 +93,7 @@ pub async fn health(State(state): State<AppState>) -> impl IntoResponse {
         projects_handlers::list_projects,
         projects_handlers::get_project,
         projects_handlers::patch_project,
+        projects_handlers::delete_project,
         projects_handlers::create_project,
         projects_handlers::list_project_members,
         projects_handlers::record_project_view,
@@ -149,6 +150,7 @@ pub async fn health(State(state): State<AppState>) -> impl IntoResponse {
         crate::modules::projects::models::CreateProjectResponse,
         crate::modules::projects::models::PatchProjectRequest,
         crate::modules::projects::models::PatchProjectResponse,
+        crate::modules::projects::models::DeleteProjectRequest,
         crate::modules::projects::models::ProjectMemberItem,
         crate::modules::projects::models::ListProjectMembersResponse,
         crate::modules::invites::models::CreateInviteRequest,
@@ -252,7 +254,9 @@ pub fn router(state: AppState) -> Router {
         .route("/projects/{projectId}/issues", get(issues_handlers::list_issues))
         .route(
             "/orgs/{orgSlug}/projects/{projectKey}",
-            get(projects_handlers::get_project).patch(projects_handlers::patch_project),
+            get(projects_handlers::get_project)
+                .patch(projects_handlers::patch_project)
+                .delete(projects_handlers::delete_project),
         )
         .route(
             "/orgs/{orgSlug}/projects/{projectKey}/view",

@@ -10,9 +10,9 @@ use crate::modules::{
     orgs::repository as orgs_repo,
     projects::{
         models::{
-            CreateProjectRequest, CreateProjectResponse, GetProjectResponse,
-            ListMyProjectsQuery, ListMyProjectsResponse, ListProjectMembersResponse,
-            PatchProjectRequest, PatchProjectResponse,
+            CreateProjectRequest, CreateProjectResponse, DeleteProjectRequest,
+            GetProjectResponse, ListMyProjectsQuery, ListMyProjectsResponse,
+            ListProjectMembersResponse, PatchProjectRequest, PatchProjectResponse,
         },
         service as projects_service,
     },
@@ -123,6 +123,35 @@ pub async fn patch_project(
 ) -> Result<(StatusCode, Json<PatchProjectResponse>), AppError> {
     let res = projects_service::patch_project(&state.db, user_id, &org_slug, &project_key, req).await?;
     Ok((StatusCode::OK, Json(res)))
+}
+
+#[utoipa::path(
+    delete,
+    path = "/orgs/{orgSlug}/projects/{projectKey}",
+    tag = "projects",
+    security(("bearer_auth" = [])),
+    params(
+        ("orgSlug" = String, Path),
+        ("projectKey" = String, Path),
+    ),
+    request_body = DeleteProjectRequest,
+    responses(
+        (status = 204, description = "Project deleted"),
+        (status = 400, description = "Confirmation mismatch"),
+        (status = 401, description = "Unauthorized"),
+        (status = 403, description = "Forbidden"),
+        (status = 404, description = "Not found"),
+        (status = 500, description = "Server error"),
+    )
+)]
+pub async fn delete_project(
+    Path((org_slug, project_key)): Path<(String, String)>,
+    State(state): State<AppState>,
+    AuthUser(user_id): AuthUser,
+    Json(req): Json<DeleteProjectRequest>,
+) -> Result<StatusCode, AppError> {
+    projects_service::delete_project(&state.db, user_id, &org_slug, &project_key, req).await?;
+    Ok(StatusCode::NO_CONTENT)
 }
 
 #[utoipa::path(
