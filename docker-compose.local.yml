@@ -1,10 +1,8 @@
-# Yerel / izole ortam: runtime'da internal: true — konteynerler birbirine erişir, dış internete çıkmaz.
-# Ana docker-compose.yml'de bu kısıt yoktur.
+# Veri gizliliği (runtime): internal: true — çalışan konteynerler dış internete çıkamaz; bu pull_policy ile değil, ağ ile sağlanır.
+# Kurulum / build: İnternet kullanılabilir — taban imajlar yerelde yoksa `pull_policy: missing` ile bir kez indirilir; api/web Dockerfile build'i registry + crates/npm kullanır.
+# Tamamen çevrimdışı kurulum: docker save/load ile taban imajları taşıyın; bu dosyada pull_policy'yi never yapın veya --pull never kullanın.
 #
-# Çevrimdışı imaj: postgres/minio için `docker load`; api/web için önceden build (internet varken).
-#
-# API build: önce postgres + migration, sonra build (ana docker-compose.yml ile aynı sıra).
-# Üçüncü parti imajlar: pull Policy never — yalnızca yerel cache / docker load.
+# API build: önce postgres + migration, sonra build (ana dosyayla aynı sıra).
 
 networks:
   koro_local:
@@ -16,7 +14,7 @@ services:
     image: postgres:16
     container_name: koro-postgres-local
     restart: unless-stopped
-    pull_policy: never
+    pull_policy: missing
     networks:
       - koro_local
     environment:
@@ -37,7 +35,7 @@ services:
     image: minio/minio:latest
     container_name: koro-minio-local
     restart: unless-stopped
-    pull_policy: never
+    pull_policy: missing
     networks:
       - koro_local
     environment:
@@ -53,7 +51,7 @@ services:
   minio-init:
     image: minio/mc:latest
     container_name: koro-minio-init-local
-    pull_policy: never
+    pull_policy: missing
     networks:
       - koro_local
     depends_on:
@@ -68,7 +66,6 @@ services:
 
   api:
     image: koro-api:local
-    pull_policy: never
     build:
       context: ./apps/api
       dockerfile: Dockerfile
@@ -98,7 +95,6 @@ services:
 
   web:
     image: koro-web:local
-    pull_policy: never
     build:
       context: ./apps/web
       dockerfile: Dockerfile
