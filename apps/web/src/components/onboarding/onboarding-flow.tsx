@@ -27,7 +27,6 @@ function slugFromName(name: string) {
 export function OnboardingFlow() {
   const router = useRouter()
   const [step, setStep] = useState<1 | 2>(1)
-  const [orgId, setOrgId] = useState<string | null>(null)
   const [orgSlug, setOrgSlug] = useState<string | null>(null)
 
   const [orgName, setOrgName] = useState("")
@@ -67,7 +66,6 @@ export function OnboardingFlow() {
       if (!res.ok) {
         throw new Error(data.message ?? "Organizasyon oluşturulamadı")
       }
-      setOrgId(data.org_id ?? null)
       setOrgSlug(data.slug ?? null)
       setStep(2)
       setProjectKey("")
@@ -81,12 +79,12 @@ export function OnboardingFlow() {
 
   const handleCreateProject = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!orgId || !orgSlug) return
+    if (!orgSlug) return
     setError(null)
     setLoading(true)
     try {
       const key = projectKey.trim().toUpperCase() || "PROJ"
-      const res = await fetch(`/api/orgs/${orgId}/projects`, {
+      const res = await fetch(`/api/orgs/${orgSlug}/projects`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

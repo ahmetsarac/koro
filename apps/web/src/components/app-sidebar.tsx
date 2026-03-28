@@ -118,7 +118,7 @@ export async function AppSidebar({ orgSlug, ...props }: AppSidebarProps) {
       </SidebarHeader>
       <SidebarContent>
         <NavMain items={navItems} />
-        <NavProjects projects={projects} />
+        <NavProjects projects={projects} orgSlug={orgSlug} />
       </SidebarContent>
       <SidebarFooter>
         <NavUser user={user} />

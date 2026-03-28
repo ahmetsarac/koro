@@ -92,6 +92,7 @@ pub async fn health(State(state): State<AppState>) -> impl IntoResponse {
         orgs_handlers::patch_org,
         projects_handlers::list_projects,
         projects_handlers::get_project,
+        projects_handlers::patch_project,
         projects_handlers::create_project,
         projects_handlers::list_project_members,
         invites_handlers::create_invite,
@@ -145,6 +146,8 @@ pub async fn health(State(state): State<AppState>) -> impl IntoResponse {
         crate::modules::projects::models::GetProjectResponse,
         crate::modules::projects::models::CreateProjectRequest,
         crate::modules::projects::models::CreateProjectResponse,
+        crate::modules::projects::models::PatchProjectRequest,
+        crate::modules::projects::models::PatchProjectResponse,
         crate::modules::projects::models::ProjectMemberItem,
         crate::modules::projects::models::ListProjectMembersResponse,
         crate::modules::invites::models::CreateInviteRequest,
@@ -240,12 +243,15 @@ pub fn router(state: AppState) -> Router {
         .route("/login", post(auth_handlers::login))
         .route("/signup", post(auth_handlers::signup))
         .route("/refresh", post(auth_handlers::refresh))
-        .route("/orgs/{orgId}/projects", post(projects_handlers::create_project))
+        .route(
+            "/orgs/{orgSlug}/projects",
+            post(projects_handlers::create_project),
+        )
         .route("/projects/{projectId}/issues", post(issues_handlers::create_issue))
         .route("/projects/{projectId}/issues", get(issues_handlers::list_issues))
         .route(
             "/orgs/{orgSlug}/projects/{projectKey}",
-            get(projects_handlers::get_project),
+            get(projects_handlers::get_project).patch(projects_handlers::patch_project),
         )
         .route(
             "/orgs/{orgSlug}/projects/{projectKey}/members",

@@ -42,3 +42,53 @@ export async function GET(
     )
   }
 }
+
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: Promise<{ orgSlug: string; projectKey: string }> }
+) {
+  try {
+    const { orgSlug, projectKey } = await params
+    const accessToken = request.cookies.get(ACCESS_TOKEN_COOKIE_NAME)?.value
+    if (!accessToken) {
+      return NextResponse.json({ message: "Unauthorized" }, { status: 401 })
+    }
+
+    const body = (await request.json()) as { name?: string }
+    const name =
+      typeof body?.name === "string" ? body.name.trim() : ""
+    if (!name) {
+      return NextResponse.json({ message: "name is required" }, { status: 400 })
+    }
+
+    const response = await fetch(
+      `${getApiBaseUrl()}/orgs/${orgSlug}/projects/${projectKey}`,
+      {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({ name }),
+      }
+    )
+
+    const text = await response.text()
+    if (!response.ok) {
+      return NextResponse.json(
+        { message: text || "Failed to update project" },
+        { status: response.status }
+      )
+    }
+    return new NextResponse(text, {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    })
+  } catch (error) {
+    console.error("Failed to patch project", error)
+    return NextResponse.json(
+      { message: "Failed to update project" },
+      { status: 500 }
+    )
+  }
+}

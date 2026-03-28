@@ -109,6 +109,62 @@ pub async fn get_project(
     })
 }
 
+pub async fn patch_project(
+    pool: &PgPool,
+    user_id: Uuid,
+    org_slug: &str,
+    project_key: &str,
+    req: PatchProjectRequest,
+) -> Result<PatchProjectResponse, AppError> {
+    let name = req.name.trim();
+    if name.is_empty() || name.len() > 200 {
+        return Err(AppError::BadRequest(Some("invalid name")));
+    }
+
+    let org_id = orgs_repo::find_org_id_by_slug(pool, org_slug)
+        .await
+        .map_err(|e| {
+            tracing::error!(?e, "patch_project org resolve");
+            AppError::Internal
+        })?
+        .ok_or(AppError::NotFound)?;
+
+    let row = projects_repo::get_project_for_member(pool, user_id, org_id, project_key)
+        .await
+        .map_err(|e| {
+            tracing::error!(?e, "patch_project membership");
+            AppError::Internal
+        })?
+        .ok_or(AppError::NotFound)?;
+
+    let project_id = row.id;
+
+    let can = crate::modules::issues::repository::user_can_manage_workflow_statuses(
+        pool, project_id, user_id,
+    )
+    .await
+    .map_err(|e| {
+        tracing::error!(?e, "patch_project permission");
+        AppError::Internal
+    })?;
+    if !can {
+        return Err(AppError::Forbidden);
+    }
+
+    let project_key_db = projects_repo::update_project_name(pool, project_id, name)
+        .await
+        .map_err(|e| {
+            tracing::error!(?e, "patch_project update");
+            AppError::Internal
+        })?;
+
+    Ok(PatchProjectResponse {
+        id: project_id,
+        project_key: project_key_db,
+        name: name.to_string(),
+    })
+}
+
 pub async fn create_project(
     pool: &PgPool,
     org_id: Uuid,

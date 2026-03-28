@@ -1,10 +1,9 @@
 "use client"
 
 import * as React from "react"
-import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { use } from "react"
-import { ArrowLeft, Plus, Trash2 } from "lucide-react"
+import { Plus, Trash2 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -161,20 +160,13 @@ export default function WorkflowStatusesSettingsPage({
   const reassignOptions = allStatuses.filter((s) => s.id !== deleteTarget?.id)
 
   return (
-    <div className="mx-auto flex max-w-2xl flex-col gap-8 p-4">
-      <div className="flex items-center gap-4">
-        <Button variant="ghost" size="icon" asChild>
-          <Link href={`/${orgSlug}/projects/${projectKey}`}>
-            <ArrowLeft className="h-4 w-4" />
-          </Link>
-        </Button>
-        <div>
-          <h1 className="text-xl font-semibold">Workflow statuses</h1>
-          <p className="text-sm text-muted-foreground">
-            Categories group how work is reported; statuses are your team&apos;s
-            steps inside each category.
-          </p>
-        </div>
+    <div className="mx-auto flex max-w-2xl flex-col gap-8">
+      <div>
+        <h2 className="text-lg font-medium">Workflow statuses</h2>
+        <p className="text-sm text-muted-foreground">
+          Categories group how work is reported; statuses are your team&apos;s
+          steps inside each category.
+        </p>
       </div>
 
       {error ? (

@@ -148,6 +148,20 @@ pub async fn insert_project_manager_tx(
     Ok(())
 }
 
+pub async fn update_project_name(
+    pool: &PgPool,
+    project_id: Uuid,
+    name: &str,
+) -> Result<String, sqlx::Error> {
+    sqlx::query_scalar::<_, String>(
+        r#"UPDATE projects SET name = $1, updated_at = now() WHERE id = $2 RETURNING project_key"#,
+    )
+    .bind(name)
+    .bind(project_id)
+    .fetch_one(pool)
+    .await
+}
+
 pub async fn find_project_id_in_org(
     pool: &PgPool,
     org_id: Uuid,

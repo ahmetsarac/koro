@@ -64,6 +64,18 @@ pub struct CreateProjectResponse {
     pub name: String,
 }
 
+#[derive(Deserialize, ToSchema)]
+pub struct PatchProjectRequest {
+    pub name: String,
+}
+
+#[derive(Serialize, ToSchema)]
+pub struct PatchProjectResponse {
+    pub id: Uuid,
+    pub project_key: String,
+    pub name: String,
+}
+
 #[derive(Serialize, ToSchema)]
 pub struct ProjectMemberItem {
     pub user_id: Uuid,

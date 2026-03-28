@@ -1,9 +1,11 @@
 "use client"
 
+import * as React from "react"
 import Link from "next/link"
-import { usePathname } from "next/navigation"
+import { usePathname, useRouter } from "next/navigation"
 import { MoreHorizontalIcon, PlusIcon } from "lucide-react"
 
+import { NewProjectModal } from "@/components/projects/new-project-modal"
 import {
   SidebarGroup,
   SidebarGroupAction,
@@ -16,7 +18,9 @@ import {
 
 export function NavProjects({
   projects,
+  orgSlug,
 }: {
+  orgSlug: string
   projects: {
     name: string
     key: string
@@ -25,31 +29,46 @@ export function NavProjects({
     openIssueCount: number
   }[]
 }) {
-  const pathname = usePathname()
-
-  function isRouteActive(url: string) {
-    const route = url.split("#")[0]
-    return pathname === route || pathname.startsWith(`${route}/`)
-  }
+  const router = useRouter()
+  const [createProjectOpen, setCreateProjectOpen] = React.useState(false)
 
   return (
-    <SidebarGroup className="group-data-[collapsible=icon]:hidden">
-      <div className="flex items-center">
-        <SidebarGroupLabel className="flex-1">Projects</SidebarGroupLabel>
-        {projects.length > 0 && (<SidebarGroupAction
-          aria-label="Create project"
-          title="Create project"
-          type="button"
-          className="rounded-sm cursor-pointer relative top-0 right-0"
-        >
-          <PlusIcon />
-        </SidebarGroupAction>)}
-      </div>
-      {projects.length === 0 ? (<NavProjectsEmpty />) : (<NavProjectsList projects={projects} />)}
-    </SidebarGroup>
+    <>
+      <NewProjectModal
+        orgSlug={orgSlug}
+        open={createProjectOpen}
+        onOpenChange={setCreateProjectOpen}
+        onSuccess={() => router.refresh()}
+      />
+      <SidebarGroup className="group-data-[collapsible=icon]:hidden">
+        <div className="flex items-center">
+          <SidebarGroupLabel className="flex-1">Projects</SidebarGroupLabel>
+          {projects.length > 0 && (
+            <SidebarGroupAction
+              aria-label="Create project"
+              title="Create project"
+              type="button"
+              className="rounded-sm cursor-pointer relative top-0 right-0"
+              onClick={() => setCreateProjectOpen(true)}
+            >
+              <PlusIcon />
+            </SidebarGroupAction>
+          )}
+        </div>
+        {projects.length === 0 ? (
+          <NavProjectsEmpty onCreateProject={() => setCreateProjectOpen(true)} />
+        ) : (
+          <NavProjectsList projects={projects} />
+        )}
+      </SidebarGroup>
+    </>
   )
 }
-function NavProjectsEmpty() {
+function NavProjectsEmpty({
+  onCreateProject,
+}: {
+  onCreateProject: () => void
+}) {
   return (
     <SidebarMenu className="flex flex-col items-center justify-center">
     <SidebarMenuItem>
@@ -57,20 +76,22 @@ function NavProjectsEmpty() {
         No projects yet.
       </p>
     </SidebarMenuItem>
-    <NavProjectsCreate />
+    <NavProjectsCreate onCreateProject={onCreateProject} />
     </SidebarMenu>
   )
 }
 
-function NavProjectsCreate() {
+function NavProjectsCreate({
+  onCreateProject,
+}: {
+  onCreateProject: () => void
+}) {
   return (
     <SidebarMenuItem className="border border-dashed border-sidebar-border hover:bg-sidebar-accent hover:border-sidebar-accent w-full rounded-sm">
       <SidebarMenuButton
         className="flex items-center justify-center cursor-pointer"
         type="button"
-        onClick={() => {
-          // TODO: Open create project modal in the future
-        }}
+        onClick={onCreateProject}
       >
         <PlusIcon />
         <span>Create project</span>

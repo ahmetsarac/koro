@@ -20,6 +20,7 @@ const routeLabels: Record<string, string> = {
   created: "Created",
   projects: "Projects",
   settings: "Settings",
+  "workflow-statuses": "Workflow statuses",
 }
 
 type Crumb = { label: string; href: string; isLast: boolean }

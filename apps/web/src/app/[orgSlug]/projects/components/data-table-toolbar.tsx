@@ -10,11 +10,13 @@ interface DataTableToolbarProps<TData> {
   table: Table<TData>
   searchValue: string
   onSearchChange: (value: string) => void
+  onNewProject: () => void
 }
 
 export function DataTableToolbar<TData>({
   searchValue,
   onSearchChange,
+  onNewProject,
 }: DataTableToolbarProps<TData>) {
   return (
     <div className="flex items-center justify-between">
@@ -37,7 +39,12 @@ export function DataTableToolbar<TData>({
         )}
       </div>
       <div className="flex items-center gap-2">
-        <Button data-icon="inline-start" size="lg">
+        <Button
+          type="button"
+          data-icon="inline-start"
+          size="lg"
+          onClick={onNewProject}
+        >
           <PlusIcon />
           New Project
         </Button>

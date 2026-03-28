@@ -138,9 +138,9 @@ export default function ProjectDetailPage({
 
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" asChild>
-            <Link href={`/${orgSlug}/projects/${projectKey}/settings/workflow-statuses`}>
+            <Link href={`/${orgSlug}/projects/${projectKey}/settings`}>
               <Settings2 className="h-4 w-4" />
-              Statuses
+              Settings
             </Link>
           </Button>
           <Button data-icon="inline-start" onClick={() => setNewIssueOpen(true)}>

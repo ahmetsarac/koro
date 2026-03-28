@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import { useRouter } from "next/navigation"
 import {
   flexRender,
   getCoreRowModel,
@@ -16,6 +17,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 
+import { NewProjectModal } from "@/components/projects/new-project-modal"
 import { DataTableToolbar } from "./data-table-toolbar"
 import { fetchMyProjects, type FetchMyProjectsParams } from "@/lib/my-projects"
 import { type Project } from "../data/schema"
@@ -44,9 +46,14 @@ function useDebounce<T>(value: T, delay: number): T {
 
 interface DataTableProps {
   columns: ColumnDef<Project, unknown>[]
+  orgSlug: string
 }
 
-export function DataTable({ columns }: DataTableProps) {
+export function DataTable({ columns, orgSlug }: DataTableProps) {
+  const router = useRouter()
+  const [newProjectOpen, setNewProjectOpen] = React.useState(false)
+  const [listRefreshKey, setListRefreshKey] = React.useState(0)
+
   const [items, setItems] = React.useState<Project[]>([])
   const [total, setTotal] = React.useState(0)
   const [hasMore, setHasMore] = React.useState(true)
@@ -100,7 +107,7 @@ export function DataTable({ columns }: DataTableProps) {
     return () => {
       cancelled = true
     }
-  }, [debouncedSearch])
+  }, [debouncedSearch, listRefreshKey])
 
   React.useLayoutEffect(() => {
     const container = scrollContainerRef.current
@@ -199,10 +206,20 @@ export function DataTable({ columns }: DataTableProps) {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4">
+      <NewProjectModal
+        orgSlug={orgSlug}
+        open={newProjectOpen}
+        onOpenChange={setNewProjectOpen}
+        onSuccess={() => {
+          setListRefreshKey((k) => k + 1)
+          router.refresh()
+        }}
+      />
       <DataTableToolbar
         table={table}
         searchValue={searchValue}
         onSearchChange={setSearchValue}
+        onNewProject={() => setNewProjectOpen(true)}
       />
 
       <div
