@@ -3,7 +3,7 @@
 import * as React from "react"
 import { use } from "react"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import {
   Circle,
   Timer,
@@ -48,6 +48,7 @@ import {
 import { updateIssueInCaches } from "@/lib/cache/issues-cache"
 import { DescriptionEditor } from "@/components/issues/description-editor"
 import { cn } from "@/lib/utils"
+import { issueDetailHrefPreserveSource } from "@/lib/issue-nav"
 
 interface Issue {
   issue_id: string
@@ -305,13 +306,14 @@ async function updateIssueStatus(
   }
 }
 
-export default function IssueDetailPage({
+function IssueDetailPage({
   params,
 }: {
   params: Promise<{ orgSlug: string; issueKey: string }>
 }) {
   const { orgSlug, issueKey } = use(params)
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [issue, setIssue] = React.useState<Issue | null>(null)
   const [isLoading, setIsLoading] = React.useState(true)
   const [error, setError] = React.useState<string | null>(null)
@@ -893,7 +895,11 @@ export default function IssueDetailPage({
                               className="flex items-center gap-1 rounded-md px-1 py-0.5 hover:bg-muted/50"
                             >
                               <Link
-                                href={`/${orgSlug}/issue/${item.issue_key}`}
+                                href={issueDetailHrefPreserveSource(
+                                  orgSlug,
+                                  item.issue_key,
+                                  searchParams
+                                )}
                                 className="min-w-0 flex-1"
                                 onClick={() => setDepsOpen(false)}
                               >
@@ -938,7 +944,11 @@ export default function IssueDetailPage({
                               className="flex items-center gap-1 rounded-md px-1 py-0.5 hover:bg-muted/50"
                             >
                               <Link
-                                href={`/${orgSlug}/issue/${item.issue_key}`}
+                                href={issueDetailHrefPreserveSource(
+                                  orgSlug,
+                                  item.issue_key,
+                                  searchParams
+                                )}
                                 className="min-w-0 flex-1"
                                 onClick={() => setDepsOpen(false)}
                               >
@@ -1276,5 +1286,29 @@ export default function IssueDetailPage({
         </div>
       </div>
     </div>
+  )
+}
+
+function IssueDetailPageFallback() {
+  return (
+    <div className="flex h-[calc(100svh-4.5rem)] flex-col gap-6">
+      <div className="flex items-center gap-4">
+        <Skeleton className="h-8 w-8" />
+        <Skeleton className="h-6 w-24" />
+      </div>
+      <Skeleton className="h-10 w-2/3" />
+      <Skeleton className="h-6 w-32" />
+      <Skeleton className="h-40 w-full" />
+    </div>
+  )
+}
+
+export default function IssueDetailPageRoute(props: {
+  params: Promise<{ orgSlug: string; issueKey: string }>
+}) {
+  return (
+    <React.Suspense fallback={<IssueDetailPageFallback />}>
+      <IssueDetailPage {...props} />
+    </React.Suspense>
   )
 }

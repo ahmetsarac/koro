@@ -11,6 +11,7 @@ import {
 } from "lucide-react"
 
 import { IssueKanbanBoard } from "@/components/issues/issue-kanban-board"
+import { issueDetailHref } from "@/lib/issue-nav"
 
 interface IssueListItem {
   issue_id: string
@@ -159,7 +160,12 @@ export function ProjectKanbanBoard({
         getIssueId={(issue) => issue.issue_id}
         getIssueKey={(issue) => issue.display_key}
         getIssueTitle={(issue) => issue.title}
-        getIssueHref={(issue) => `/${orgSlug}/issue/${issue.display_key}`}
+        getIssueHref={(issue) =>
+          issueDetailHref(orgSlug, issue.display_key, {
+            from: "project",
+            projectKey,
+          })
+        }
         getIssueProjectId={projectId ? () => projectId : undefined}
         onIssueMove={({ issueId, toColumnId, position }) =>
           handleIssueMove({ issueId, toColumnId, position })

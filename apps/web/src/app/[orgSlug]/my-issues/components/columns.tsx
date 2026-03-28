@@ -19,6 +19,7 @@ import { type Issue } from "../data/schema"
 import { DataTableColumnHeader } from "./data-table-column-header"
 import { DataTableRowActions } from "./data-table-row-actions"
 import { updateIssueInCaches } from "@/lib/cache/issues-cache"
+import { issueDetailHref } from "@/lib/issue-nav"
 
 interface WorkflowOption {
   id: string
@@ -151,7 +152,9 @@ export const createColumns = (orgSlug: string): ColumnDef<Issue>[] => [
     ),
     cell: ({ row }) => (
       <Link
-        href={`/${orgSlug}/issue/${row.original.display_key}`}
+        href={issueDetailHref(orgSlug, row.original.display_key, {
+          from: "my-issues",
+        })}
         className="w-[80px] font-mono text-xs hover:underline"
       >
         {row.original.display_key}
@@ -168,7 +171,9 @@ export const createColumns = (orgSlug: string): ColumnDef<Issue>[] => [
     ),
     cell: ({ row }) => (
       <Link
-        href={`/${orgSlug}/issue/${row.original.display_key}`}
+        href={issueDetailHref(orgSlug, row.original.display_key, {
+          from: "my-issues",
+        })}
         className="max-w-[500px] truncate font-medium hover:underline"
       >
         {row.getValue("title")}
@@ -283,7 +288,9 @@ export const createColumns = (orgSlug: string): ColumnDef<Issue>[] => [
           </DropdownMenu>
           {issue.is_blocked ? (
             <Link
-              href={`/${orgSlug}/issue/${issue.display_key}`}
+              href={issueDetailHref(orgSlug, issue.display_key, {
+                from: "my-issues",
+              })}
               className="inline-flex"
             >
               <Badge

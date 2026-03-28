@@ -33,6 +33,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import { issueDetailHref } from "@/lib/issue-nav"
 
 interface Project {
   id: string
@@ -593,7 +594,10 @@ function ProjectIssuesTab({
                     <TableRow key={issue.issue_id} style={{ height: ROW_HEIGHT }}>
                       <TableCell className="font-mono text-xs">
                         <Link
-                          href={`/${orgSlug}/issue/${issue.display_key}`}
+                          href={issueDetailHref(orgSlug, issue.display_key, {
+                            from: "project",
+                            projectKey,
+                          })}
                           className="hover:underline"
                         >
                           {issue.display_key}
@@ -601,7 +605,10 @@ function ProjectIssuesTab({
                       </TableCell>
                       <TableCell>
                         <Link
-                          href={`/${orgSlug}/issue/${issue.display_key}`}
+                          href={issueDetailHref(orgSlug, issue.display_key, {
+                            from: "project",
+                            projectKey,
+                          })}
                           className="hover:underline truncate block"
                         >
                           {issue.title}

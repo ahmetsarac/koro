@@ -42,6 +42,7 @@ import {
   type MyIssuesScrollState,
   updateIssueInCaches,
 } from "@/lib/cache/issues-cache"
+import { issueDetailHref } from "@/lib/issue-nav"
 
 const ROW_HEIGHT = 49
 const OVERSCAN = 2
@@ -915,7 +916,9 @@ export function DataTable({ orgSlug, columns, filterType }: DataTableProps) {
               getIssueId={(issue) => issue.id}
               getIssueKey={(issue) => issue.display_key}
               getIssueTitle={(issue) => issue.title}
-              getIssueHref={(issue) => `/${orgSlug}/issue/${issue.display_key}`}
+              getIssueHref={(issue) =>
+                issueDetailHref(orgSlug, issue.display_key, { from: "my-issues" })
+              }
               getIssueProjectId={(issue) => issue.project_id}
               onHideColumn={hideBoardColumn}
               onIssueMove={({ issue, issueId, fromColumnId, toColumnId, position }) =>
