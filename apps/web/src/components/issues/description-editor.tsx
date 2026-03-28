@@ -69,7 +69,8 @@ export function DescriptionEditor({
       content: value || "",
       editorProps: {
         attributes: {
-          class: "min-h-[6rem] w-full resize-none rounded-md border-0 bg-transparent px-2 py-2 text-sm outline-none prose prose-sm dark:prose-invert max-w-none",
+          class:
+            "min-h-[6rem] w-full resize-none rounded-md border-0 bg-transparent px-2 py-2 text-sm outline-none prose prose-sm dark:prose-invert max-w-none [&_img]:h-auto [&_img]:max-w-full",
         },
       },
       onUpdate: ({ editor }) => {
@@ -93,7 +94,7 @@ export function DescriptionEditor({
   return (
     <div
       className={cn(
-        "flex min-h-0 flex-col overflow-hidden rounded-md border border-input bg-input/20 text-xs/relaxed transition-colors focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/30 [&_.tiptap]:min-h-[6rem] [&_.tiptap]:outline-none [&_.tiptap_.ProseMirror-empty:first-child::before]:content-[var(--description-placeholder)] [&_.tiptap_.ProseMirror-empty:first-child::before]:float-left [&_.tiptap_.ProseMirror-empty:first-child::before]:pointer-events-none [&_.tiptap_.ProseMirror-empty:first-child::before]:text-muted-foreground [&_.tiptap_p]:my-1 [&_.tiptap_p:first-child]:mt-0 [&_.tiptap_p:last-child]:mb-0 [&_.tiptap_ul]:my-2 [&_.tiptap_ol]:my-2 [&_.tiptap_li]:my-0.5",
+        "flex min-h-0 min-w-0 flex-col overflow-hidden rounded-md border border-input bg-input/20 text-xs/relaxed transition-colors focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/30 [&_.tiptap]:min-h-[6rem] [&_.tiptap]:outline-none [&_.tiptap_.ProseMirror-empty:first-child::before]:content-[var(--description-placeholder)] [&_.tiptap_.ProseMirror-empty:first-child::before]:float-left [&_.tiptap_.ProseMirror-empty:first-child::before]:pointer-events-none [&_.tiptap_.ProseMirror-empty:first-child::before]:text-muted-foreground [&_.tiptap_p]:my-1 [&_.tiptap_p:first-child]:mt-0 [&_.tiptap_p:last-child]:mb-0 [&_.tiptap_ul]:my-2 [&_.tiptap_ol]:my-2 [&_.tiptap_li]:my-0.5",
         className
       )}
       style={{ "--description-placeholder": `"${placeholder}"` } as React.CSSProperties}
@@ -121,7 +122,7 @@ export function DescriptionEditor({
           <ImageUploadButton editor={editor} showTooltip={false} />
         </ToolbarGroup>
       </Toolbar>
-      <div className="min-h-0 flex-1 overflow-y-auto">
+      <div className="min-h-0 min-w-0 flex-1 overflow-y-auto">
         <EditorContent editor={editor} />
       </div>
     </div>

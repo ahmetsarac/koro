@@ -688,7 +688,7 @@ function IssueDetailPage({
 
   if (isLoading) {
     return (
-      <div className="flex h-[calc(100svh-4.5rem)] flex-col gap-6">
+      <div className="flex h-[calc(100svh-4.5rem)] min-w-0 flex-col gap-6">
         <div className="flex items-center gap-4">
           <Skeleton className="h-8 w-8" />
           <Skeleton className="h-6 w-24" />
@@ -742,26 +742,26 @@ function IssueDetailPage({
   })
 
   return (
-    <div className="flex h-[calc(100svh-4.5rem)] flex-col gap-6">
-      <div className="flex items-center gap-3">
-        <Button variant="ghost" size="icon" className="cursor-pointer" onClick={() => router.back()}>
+    <div className="flex h-[calc(100svh-4.5rem)] min-w-0 flex-col gap-6">
+      <div className="flex min-w-0 items-center gap-3">
+        <Button variant="ghost" size="icon" className="shrink-0 cursor-pointer" onClick={() => router.back()}>
           <ArrowLeft className="h-4 w-4" />
         </Button>
         <Link
           href={`/${orgSlug}/projects/${projectKey}`}
-          className="font-mono text-sm text-muted-foreground hover:text-foreground transition-colors"
+          className="min-w-0 break-all font-mono text-sm text-muted-foreground hover:text-foreground transition-colors"
         >
           {issue.display_key}
         </Link>
       </div>
 
-      <div className="flex-1 overflow-y-auto">
+      <div className="min-w-0 flex-1 overflow-y-auto">
         {isEditingTitle ? (
-          <div className="flex items-center gap-2 mb-4">
+          <div className="mb-4 flex min-w-0 items-center gap-2">
             <Input
               value={editedTitle}
               onChange={(e) => setEditedTitle(e.target.value)}
-              className="text-2xl font-semibold h-auto py-1 px-2"
+              className="min-w-0 flex-1 text-2xl font-semibold h-auto py-1 px-2"
               disabled={isSavingTitle}
               autoFocus
               onKeyDown={(e) => {
@@ -794,14 +794,14 @@ function IssueDetailPage({
           </div>
         ) : (
           <h1
-            className="text-2xl font-semibold mb-4 cursor-pointer hover:bg-muted/50 rounded px-2 py-1 -mx-2 transition-colors"
+            className="text-2xl font-semibold mb-4 cursor-pointer rounded px-2 py-1 transition-colors break-words hover:bg-muted/50"
             onClick={handleStartEditTitle}
           >
             {issue.title}
           </h1>
         )}
 
-        <div className="flex items-center gap-4 mb-6">
+        <div className="mb-6 flex min-w-0 flex-wrap items-center gap-x-4 gap-y-2">
           <DropdownMenu>
             <DropdownMenuTrigger asChild disabled={isUpdatingStatus}>
               <button className="focus:outline-none">
@@ -1116,7 +1116,7 @@ function IssueDetailPage({
           </DropdownMenu>
         </div>
 
-        <div className="flex items-center gap-6 text-sm text-muted-foreground mb-8">
+        <div className="mb-8 flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-muted-foreground">
           <div className="flex items-center gap-1.5">
             <Calendar className="h-4 w-4" />
             <span>
@@ -1141,9 +1141,9 @@ function IssueDetailPage({
           </div>
         </div>
 
-        <div className="border-t pt-6">
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-sm font-medium text-muted-foreground">
+        <div className="min-w-0 border-t pt-6">
+          <div className="mb-3 flex min-w-0 items-center justify-between gap-2">
+            <h2 className="min-w-0 text-sm font-medium text-muted-foreground">
               Description
             </h2>
             {!isEditingDescription && (
@@ -1151,7 +1151,7 @@ function IssueDetailPage({
                 variant="ghost"
                 size="sm"
                 onClick={handleStartEditDescription}
-                className="h-7 px-2 text-muted-foreground hover:text-foreground"
+                className="h-7 shrink-0 px-2 text-muted-foreground hover:text-foreground"
               >
                 <Pencil className="h-3.5 w-3.5 mr-1" />
                 Edit
@@ -1190,7 +1190,7 @@ function IssueDetailPage({
             </div>
           ) : issue.description ? (
             <div
-              className="prose prose-sm dark:prose-invert max-w-none [&_ul]:my-2 [&_ol]:my-2 [&_li]:my-0.5 [&_p]:my-1 [&_p:first-child]:mt-0 [&_p:last-child]:mb-0"
+              className="prose prose-sm dark:prose-invert max-w-none min-w-0 break-words [&_img]:h-auto [&_img]:max-w-full [&_pre]:max-w-full [&_pre]:overflow-x-auto [&_table]:block [&_table]:max-w-full [&_table]:overflow-x-auto [&_video]:max-w-full [&_ul]:my-2 [&_ol]:my-2 [&_li]:my-0.5 [&_p]:my-1 [&_p:first-child]:mt-0 [&_p:last-child]:mb-0"
               dangerouslySetInnerHTML={{ __html: issue.description }}
             />
           ) : (
@@ -1203,7 +1203,7 @@ function IssueDetailPage({
           )}
         </div>
 
-        <div className="border-t pt-6 mt-6">
+        <div className="mt-6 min-w-0 border-t pt-6">
           <h2 className="text-sm font-medium text-muted-foreground mb-4 flex items-center gap-2">
             <MessageSquare className="h-4 w-4" />
             Comments ({comments.length})

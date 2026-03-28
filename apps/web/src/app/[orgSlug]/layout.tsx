@@ -20,21 +20,23 @@ export default async function OrgLayout({
   return (
     <SidebarProvider>
       <AppSidebar orgSlug={orgSlug} />
-      <SidebarInset className="min-h-0 overflow-hidden">
-        <header className="sticky top-0 z-20 flex h-12 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12 bg-background border-b">
-          <div className="flex items-center gap-2 px-6">
-            <SidebarTrigger className="-ml-1" />
+      <SidebarInset className="min-h-0 min-w-0 overflow-hidden">
+        <header className="sticky top-0 z-20 flex h-12 min-w-0 shrink-0 items-center gap-2 transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-12 bg-background border-b">
+          <div className="flex min-w-0 flex-1 items-center gap-2 px-6">
+            <SidebarTrigger className="-ml-1 shrink-0" />
             <Separator
               orientation="vertical"
-              className="mr-2 data-[orientation=vertical]:h-4 data-[orientation=vertical]:self-auto"
+              className="mr-2 shrink-0 data-[orientation=vertical]:h-4 data-[orientation=vertical]:self-auto"
             />
-            <OrgBreadcrumb />
+            <div className="min-w-0">
+              <OrgBreadcrumb />
+            </div>
           </div>
-          <div className="ml-auto px-6">
+          <div className="shrink-0 px-6">
             <ThemeToggle />
           </div>
         </header>
-        <main className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto px-6 py-2">
+        <main className="flex min-h-0 min-w-0 flex-1 flex-col gap-6 overflow-y-auto px-6 py-2">
           {children}
         </main>
       </SidebarInset>
