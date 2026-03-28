@@ -88,3 +88,42 @@ export async function PATCH(
     )
   }
 }
+
+export async function DELETE(
+  _request: NextRequest,
+  { params }: { params: Promise<{ orgSlug: string; issueKey: string }> }
+) {
+  try {
+    const { orgSlug, issueKey } = await params
+
+    const accessToken = _request.cookies.get(ACCESS_TOKEN_COOKIE_NAME)?.value
+    if (!accessToken) {
+      return NextResponse.json({ message: "Unauthorized" }, { status: 401 })
+    }
+
+    const response = await fetch(
+      `${getApiBaseUrl()}/orgs/${orgSlug}/issues/${issueKey}`,
+      {
+        method: "DELETE",
+        cache: "no-store",
+        headers: { Authorization: `Bearer ${accessToken}` },
+      }
+    )
+
+    if (!response.ok) {
+      const text = (await response.text()).trim()
+      return NextResponse.json(
+        { message: text.length > 0 ? text : "Delete failed." },
+        { status: response.status }
+      )
+    }
+
+    return new NextResponse(null, { status: 204 })
+  } catch (error) {
+    console.error("Failed to delete issue", error)
+    return NextResponse.json(
+      { message: "Failed to delete issue" },
+      { status: 500 }
+    )
+  }
+}

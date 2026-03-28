@@ -21,13 +21,42 @@ import { DataTableRowActions } from "./data-table-row-actions"
 import { updateIssueInCaches } from "@/lib/cache/issues-cache"
 import { issueDetailHref } from "@/lib/issue-nav"
 
-interface WorkflowOption {
+export interface WorkflowOption {
   id: string
   category: string
   name: string
   slug: string
   position: number
   is_default: boolean
+}
+
+/** Multi-project selection overlay: union of statuses; only `bulkSelectable` rows apply to every project. */
+export type WorkflowBulkOption = WorkflowOption & { bulkSelectable: boolean }
+
+/** Matches `list_workflow_statuses_for_project_ordered` in the API (backlog → todo → …). */
+const WORKFLOW_CATEGORY_ORDER: Record<string, number> = {
+  backlog: 0,
+  unstarted: 1,
+  started: 2,
+  completed: 3,
+  canceled: 4,
+}
+
+function categoryOrderRank(category: string): number {
+  return WORKFLOW_CATEGORY_ORDER[category] ?? 100
+}
+
+function compareWorkflowOptionsByCategory(a: WorkflowOption, b: WorkflowOption): number {
+  const ra = categoryOrderRank(a.category)
+  const rb = categoryOrderRank(b.category)
+  if (ra !== rb) {
+    if (ra >= 100 && rb >= 100) {
+      return a.category.localeCompare(b.category)
+    }
+    return ra - rb
+  }
+  if (a.position !== b.position) return a.position - b.position
+  return a.slug.localeCompare(b.slug)
 }
 
 const workflowOptionsCache = new Map<string, WorkflowOption[]>()
@@ -37,29 +66,31 @@ function workflowCacheKey(orgSlug: string, projectKey: string) {
   return `${orgSlug}\0${projectKey}`
 }
 
-function projectKeyFromDisplayKey(displayKey: string): string {
+export function projectKeyFromDisplayKey(displayKey: string): string {
   const i = displayKey.lastIndexOf("-")
   return i >= 0 ? displayKey.slice(0, i) : displayKey
 }
 
-async function getWorkflowStatusOptions(
+export async function getWorkflowStatusOptions(
   orgSlug: string,
   projectKey: string
 ): Promise<WorkflowOption[]> {
-  const k = workflowCacheKey(orgSlug, projectKey)
+  const normalizedKey = projectKey.trim().toUpperCase()
+  const k = workflowCacheKey(orgSlug, normalizedKey)
   const hit = workflowOptionsCache.get(k)
   if (hit) return hit
   const inflight = workflowOptionsInflight.get(k)
   if (inflight) return inflight
 
   const p = fetch(
-    `/api/orgs/${orgSlug}/projects/${projectKey}/workflow-statuses`,
+    `/api/orgs/${orgSlug}/projects/${normalizedKey}/workflow-statuses`,
     { cache: "no-store", credentials: "same-origin" }
   )
     .then(async (response) => {
-      const data = (response.ok
-        ? await response.json()
-        : { groups: [] }) as {
+      if (!response.ok) {
+        throw new Error(`workflow-statuses ${response.status}`)
+      }
+      const data = (await response.json()) as {
         groups?: { category: string; statuses: WorkflowOption[] }[]
       }
       const flat: WorkflowOption[] = []
@@ -68,10 +99,7 @@ async function getWorkflowStatusOptions(
           flat.push({ ...s, category: s.category || g.category })
         }
       }
-      flat.sort(
-        (a, b) =>
-          a.category.localeCompare(b.category) || a.position - b.position
-      )
+      flat.sort(compareWorkflowOptionsByCategory)
       workflowOptionsCache.set(k, flat)
       return flat
     })
@@ -81,6 +109,50 @@ async function getWorkflowStatusOptions(
 
   workflowOptionsInflight.set(k, p)
   return p
+}
+
+/** Union of workflow statuses across projects; `bulkSelectable` only if the slug exists in every project. */
+export async function getBulkWorkflowOverlayOptions(
+  orgSlug: string,
+  projectKeys: string[]
+): Promise<WorkflowBulkOption[]> {
+  const uniqueSorted = [
+    ...new Set(projectKeys.map((k) => k.trim().toUpperCase())),
+  ].sort((a, b) => a.localeCompare(b))
+  if (uniqueSorted.length === 0) return []
+  const lists = await Promise.all(
+    uniqueSorted.map((k) => getWorkflowStatusOptions(orgSlug, k))
+  )
+  if (uniqueSorted.length === 1) {
+    return lists[0]!.map((o) => ({ ...o, bulkSelectable: true }))
+  }
+
+  const n = lists.length
+  const slugProjectCount = new Map<string, number>()
+  const slugRepresentative = new Map<string, WorkflowOption>()
+
+  for (let pi = 0; pi < n; pi++) {
+    const seen = new Set<string>()
+    for (const o of lists[pi]!) {
+      if (seen.has(o.slug)) continue
+      seen.add(o.slug)
+      slugProjectCount.set(o.slug, (slugProjectCount.get(o.slug) ?? 0) + 1)
+      if (!slugRepresentative.has(o.slug)) {
+        slugRepresentative.set(o.slug, o)
+      }
+    }
+  }
+
+  const out: WorkflowBulkOption[] = []
+  for (const rep of slugRepresentative.values()) {
+    const count = slugProjectCount.get(rep.slug) ?? 0
+    out.push({
+      ...rep,
+      bulkSelectable: count === n,
+    })
+  }
+  out.sort(compareWorkflowOptionsByCategory)
+  return out
 }
 
 async function updateIssuePriority(
@@ -202,6 +274,16 @@ export const createColumns = (orgSlug: string): ColumnDef<Issue>[] => [
         issue.status_category
       )
       const [isUpdating, setIsUpdating] = React.useState(false)
+
+      React.useEffect(() => {
+        setCurrentWid(issue.workflow_status_id)
+        setCurrentName(issue.status_name)
+        setCurrentCategory(issue.status_category)
+      }, [
+        issue.workflow_status_id,
+        issue.status_name,
+        issue.status_category,
+      ])
 
       const StatusIcon = iconForIssueCategory(currentCategory)
 
@@ -336,6 +418,10 @@ export const createColumns = (orgSlug: string): ColumnDef<Issue>[] => [
         row.getValue("priority") as string
       )
       const [isUpdating, setIsUpdating] = React.useState(false)
+
+      React.useEffect(() => {
+        setCurrentPriority(issue.priority)
+      }, [issue.priority])
 
       const priority = priorities.find(
         (priority) => priority.value === currentPriority

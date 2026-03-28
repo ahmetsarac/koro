@@ -6,8 +6,8 @@ use crate::modules::{auth::user::AuthUser, core::state::AppState};
 
 use super::{
     models::{
-        AssignIssueRequest, CreateIssueRequest, CreateWorkflowStatusRequest, DeleteWorkflowStatusQuery,
-        ListIssuesQuery, ListMyIssuesQuery, PatchWorkflowStatusRequest,
+        AssignIssueRequest, BulkMyIssuesRequest, CreateIssueRequest, CreateWorkflowStatusRequest,
+        DeleteWorkflowStatusQuery, ListIssuesQuery, ListMyIssuesQuery, PatchWorkflowStatusRequest,
         UpdateIssueBoardPositionRequest, UpdateIssueRequest, UpdateIssueStatusRequest,
     },
     service,
@@ -56,6 +56,27 @@ pub async fn list_my_issues(
     Query(query): Query<ListMyIssuesQuery>,
 ) -> impl axum::response::IntoResponse {
     service::list_my_issues(&state.db, user_id, query).await
+}
+
+#[utoipa::path(
+    post,
+    path = "/my-issues/bulk",
+    tag = "issues",
+    security(("bearer_auth" = [])),
+    request_body = BulkMyIssuesRequest,
+    responses(
+        (status = 200, description = "Updated", body = super::models::BulkMyIssuesResponse),
+        (status = 400, description = "Bad request"),
+        (status = 401, description = "Unauthorized"),
+        (status = 500, description = "Server error"),
+    )
+)]
+pub async fn bulk_my_issues(
+    State(state): State<AppState>,
+    AuthUser(user_id): AuthUser,
+    Json(req): Json<BulkMyIssuesRequest>,
+) -> impl axum::response::IntoResponse {
+    service::bulk_my_issues(&state.db, user_id, req).await
 }
 
 #[utoipa::path(
@@ -160,6 +181,31 @@ pub async fn update_issue(
     Json(req): Json<UpdateIssueRequest>,
 ) -> impl axum::response::IntoResponse {
     service::update_issue(&state.db, org_slug, issue_key, user_id, req).await
+}
+
+#[utoipa::path(
+    delete,
+    path = "/orgs/{orgSlug}/issues/{issueKey}",
+    tag = "issues",
+    security(("bearer_auth" = [])),
+    params(
+        ("orgSlug" = String, Path),
+        ("issueKey" = String, Path),
+    ),
+    responses(
+        (status = 204, description = "Deleted (archived issue only)"),
+        (status = 400, description = "Bad request"),
+        (status = 403, description = "Forbidden"),
+        (status = 404, description = "Not found"),
+        (status = 500, description = "Server error"),
+    )
+)]
+pub async fn delete_issue_by_key(
+    Path((org_slug, issue_key)): Path<(String, String)>,
+    State(state): State<AppState>,
+    AuthUser(user_id): AuthUser,
+) -> impl axum::response::IntoResponse {
+    service::delete_issue_by_key(&state.db, org_slug, issue_key, user_id).await
 }
 
 #[utoipa::path(

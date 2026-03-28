@@ -34,6 +34,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { issueDetailHref } from "@/lib/issue-nav"
+import { cn } from "@/lib/utils"
 
 interface Project {
   id: string
@@ -270,6 +271,7 @@ const COL_WIDTHS = {
   key: 100,
   title: "auto",
   status: 140,
+  actions: 88,
 }
 
 import {
@@ -284,28 +286,36 @@ interface IssuesScrollState {
   hasMore: boolean
 }
 
-function getIssuesCacheKey(orgSlug: string, projectKey: string): string {
-  return `${orgSlug}-${projectKey}`
+function getIssuesCacheKey(
+  orgSlug: string,
+  projectKey: string,
+  scope: "active" | "archived"
+): string {
+  return `${orgSlug}-${projectKey}-${scope}`
 }
 
 function saveIssuesScrollState(
   orgSlug: string,
   projectKey: string,
+  scope: "active" | "archived",
   state: IssuesScrollState
 ): void {
   projectIssuesCache.set(
-    getIssuesCacheKey(orgSlug, projectKey),
+    getIssuesCacheKey(orgSlug, projectKey, scope),
     state as ProjectIssuesScrollState
   )
 }
 
 function loadIssuesScrollState(
   orgSlug: string,
-  projectKey: string
+  projectKey: string,
+  scope: "active" | "archived"
 ): IssuesScrollState | null {
-  return projectIssuesCache.get(
-    getIssuesCacheKey(orgSlug, projectKey)
-  ) as IssuesScrollState | null ?? null
+  return (
+    (projectIssuesCache.get(getIssuesCacheKey(orgSlug, projectKey, scope)) as
+      | IssuesScrollState
+      | undefined) ?? null
+  )
 }
 
 function ProjectIssuesTab({
@@ -315,6 +325,9 @@ function ProjectIssuesTab({
   orgSlug: string
   projectKey: string
 }) {
+  const [listScope, setListScope] = React.useState<"active" | "archived">(
+    "active"
+  )
   const [items, setItems] = React.useState<IssueListItem[]>([])
   const [total, setTotal] = React.useState(0)
   const [hasMore, setHasMore] = React.useState(true)
@@ -331,8 +344,10 @@ function ProjectIssuesTab({
 
   const fetchIssues = React.useCallback(
     async (offset: number) => {
+      const archivedParam =
+        listScope === "archived" ? "&archived=true" : ""
       const response = await fetch(
-        `/api/orgs/${orgSlug}/projects/${projectKey}/issues?limit=${PAGE_SIZE}&offset=${offset}`,
+        `/api/orgs/${orgSlug}/projects/${projectKey}/issues?limit=${PAGE_SIZE}&offset=${offset}${archivedParam}`,
         {
           cache: "no-store",
           credentials: "same-origin",
@@ -345,12 +360,15 @@ function ProjectIssuesTab({
 
       return response.json() as Promise<IssuesResponse>
     },
-    [orgSlug, projectKey]
+    [orgSlug, projectKey, listScope]
   )
 
   // İlk yükleme: cache'den restore et veya API'den yükle
   React.useEffect(() => {
-    // Cache'den restore edildiyse Strict Mode ikinci çalışmasında hiçbir şey yapma
+    hasRestoredFromCacheRef.current = false
+  }, [listScope, orgSlug, projectKey])
+
+  React.useEffect(() => {
     if (hasRestoredFromCacheRef.current) {
       return
     }
@@ -358,8 +376,7 @@ function ProjectIssuesTab({
     let cancelled = false
 
     async function init() {
-      // Cache'den restore dene
-      const savedState = loadIssuesScrollState(orgSlug, projectKey)
+      const savedState = loadIssuesScrollState(orgSlug, projectKey, listScope)
       if (savedState && savedState.items.length > 0) {
         hasRestoredFromCacheRef.current = true
         setItems(savedState.items)
@@ -370,7 +387,6 @@ function ProjectIssuesTab({
         return
       }
 
-      // Cache yoksa API'den yükle
       try {
         setIsInitialLoading(true)
         setError(null)
@@ -396,7 +412,7 @@ function ProjectIssuesTab({
     return () => {
       cancelled = true
     }
-  }, [fetchIssues, orgSlug, projectKey])
+  }, [fetchIssues, orgSlug, projectKey, listScope])
 
   // Scroll pozisyonunu restore et
   React.useEffect(() => {
@@ -417,14 +433,61 @@ function ProjectIssuesTab({
   // State'i sessionStorage'a kaydet
   React.useEffect(() => {
     if (items.length > 0 && !isInitialLoading) {
-      saveIssuesScrollState(orgSlug, projectKey, {
+      saveIssuesScrollState(orgSlug, projectKey, listScope, {
         scrollTop,
         items,
         total,
         hasMore,
       })
     }
-  }, [scrollTop, items, total, hasMore, orgSlug, projectKey, isInitialLoading])
+  }, [
+    scrollTop,
+    items,
+    total,
+    hasMore,
+    orgSlug,
+    projectKey,
+    listScope,
+    isInitialLoading,
+  ])
+
+  const deleteArchivedIssue = React.useCallback(
+    async (displayKey: string) => {
+      if (
+        !window.confirm(
+          `Permanently delete ${displayKey}? This cannot be undone.`
+        )
+      ) {
+        return
+      }
+      try {
+        const res = await fetch(
+          `/api/orgs/${orgSlug}/issues/${encodeURIComponent(displayKey)}`,
+          { method: "DELETE", credentials: "same-origin" }
+        )
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({})) as {
+            message?: string
+          }
+          throw new Error(
+            typeof data?.message === "string"
+              ? data.message
+              : "Delete failed."
+          )
+        }
+        setItems((prev) => prev.filter((i) => i.display_key !== displayKey))
+        setTotal((t) => Math.max(0, t - 1))
+        projectIssuesCache.delete(
+          getIssuesCacheKey(orgSlug, projectKey, "archived")
+        )
+      } catch (e) {
+        window.alert(
+          e instanceof Error ? e.message : "Could not delete issue."
+        )
+      }
+    },
+    [orgSlug, projectKey]
+  )
 
   const loadMore = React.useCallback(async () => {
     if (isFetchingMore || !hasMore) return
@@ -506,6 +569,9 @@ function ProjectIssuesTab({
       <col style={{ width: COL_WIDTHS.key }} />
       <col />
       <col style={{ width: COL_WIDTHS.status }} />
+      {listScope === "archived" ? (
+        <col style={{ width: COL_WIDTHS.actions }} />
+      ) : null}
     </colgroup>
   )
 
@@ -533,15 +599,61 @@ function ProjectIssuesTab({
 
   if (items.length === 0) {
     return (
-      <div className="text-center text-muted-foreground py-12 border rounded-md">
-        <p>No issues in this project yet.</p>
-        <p className="text-sm mt-2">Create your first issue to get started.</p>
+      <div className="flex min-h-0 flex-1 flex-col gap-3">
+        <div className="flex gap-2">
+          <Button
+            type="button"
+            size="sm"
+            variant={listScope === "active" ? "default" : "outline"}
+            onClick={() => setListScope("active")}
+          >
+            Active
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant={listScope === "archived" ? "default" : "outline"}
+            onClick={() => setListScope("archived")}
+          >
+            Archived
+          </Button>
+        </div>
+        <div className="text-center text-muted-foreground py-12 border rounded-md">
+          <p>
+            {listScope === "archived"
+              ? "No archived issues."
+              : "No issues in this project yet."}
+          </p>
+          {listScope === "active" ? (
+            <p className="text-sm mt-2">
+              Create your first issue to get started.
+            </p>
+          ) : null}
+        </div>
       </div>
     )
   }
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4">
+      <div className="flex gap-2 shrink-0">
+        <Button
+          type="button"
+          size="sm"
+          variant={listScope === "active" ? "default" : "outline"}
+          onClick={() => setListScope("active")}
+        >
+          Active
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant={listScope === "archived" ? "default" : "outline"}
+          onClick={() => setListScope("archived")}
+        >
+          Archived
+        </Button>
+      </div>
       <div className="relative flex max-h-full min-h-0 flex-1 flex-col overflow-hidden">
         <div
           className="relative flex flex-col overflow-hidden rounded-md border"
@@ -560,6 +672,11 @@ function ProjectIssuesTab({
                 <TableHead className="bg-background shadow-[inset_0_-1px_0_0_var(--border)]">
                   Status
                 </TableHead>
+                {listScope === "archived" ? (
+                  <TableHead className="bg-background shadow-[inset_0_-1px_0_0_var(--border)] text-right">
+                    Actions
+                  </TableHead>
+                ) : null}
               </TableRow>
             </TableHeader>
           </table>
@@ -579,7 +696,7 @@ function ProjectIssuesTab({
                 {topSpacerHeight > 0 && (
                   <TableRow aria-hidden="true" className="hover:bg-transparent">
                     <TableCell
-                      colSpan={3}
+                      colSpan={listScope === "archived" ? 4 : 3}
                       className="p-0"
                       style={{ height: topSpacerHeight }}
                     />
@@ -591,7 +708,13 @@ function ProjectIssuesTab({
                     categoryRowIcon[issue.status_category] ?? Circle
 
                   return (
-                    <TableRow key={issue.issue_id} style={{ height: ROW_HEIGHT }}>
+                    <TableRow
+                      key={issue.issue_id}
+                      className={cn(
+                        listScope === "archived" && "bg-muted/20"
+                      )}
+                      style={{ height: ROW_HEIGHT }}
+                    >
                       <TableCell className="font-mono text-xs">
                         <Link
                           href={issueDetailHref(orgSlug, issue.display_key, {
@@ -626,6 +749,21 @@ function ProjectIssuesTab({
                           ) : null}
                         </div>
                       </TableCell>
+                      {listScope === "archived" ? (
+                        <TableCell className="text-right">
+                          <Button
+                            type="button"
+                            variant="destructive"
+                            size="sm"
+                            className="h-7 text-[10px]"
+                            onClick={() => {
+                              void deleteArchivedIssue(issue.display_key)
+                            }}
+                          >
+                            Delete
+                          </Button>
+                        </TableCell>
+                      ) : null}
                     </TableRow>
                   )
                 })}
@@ -633,7 +771,7 @@ function ProjectIssuesTab({
                 {bottomSpacerHeight > 0 && (
                   <TableRow aria-hidden="true" className="hover:bg-transparent">
                     <TableCell
-                      colSpan={3}
+                      colSpan={listScope === "archived" ? 4 : 3}
                       className="p-0"
                       style={{ height: bottomSpacerHeight }}
                     />

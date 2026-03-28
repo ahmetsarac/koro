@@ -1,6 +1,6 @@
 use axum::{Json, http::StatusCode, response::IntoResponse};
 use sqlx::PgPool;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 
 use crate::modules::{
     events::repository as events_repo,
@@ -10,10 +10,10 @@ use crate::modules::{
 use super::{
     models::{
         parse_issue_key, AssignIssueRequest, BoardColumnDef, BoardResponse,
-        CreateIssueRequest, CreateIssueResponse, CreateWorkflowStatusRequest, DeleteWorkflowStatusQuery,
-        IssueDetailResponse, IssueListItem, ListIssuesQuery, ListIssuesResponse, ListMyIssuesQuery,
-        ListMyIssuesResponse, ListProjectIssuesResponse, ListWorkflowStatusesResponse, MyIssueItem,
-        MyIssuesCursor,
+        BulkMyIssuesRequest, BulkMyIssuesResponse, CreateIssueRequest, CreateIssueResponse,
+        CreateWorkflowStatusRequest, DeleteWorkflowStatusQuery, IssueDetailResponse, IssueListItem,
+        ListIssuesQuery, ListIssuesResponse, ListMyIssuesQuery, ListMyIssuesResponse,
+        ListProjectIssuesResponse, ListWorkflowStatusesResponse, MyIssueItem, MyIssuesCursor,
         PatchWorkflowStatusRequest, UpdateIssueBoardPositionRequest,
         UpdateIssueBoardPositionResponse, UpdateIssueRequest, UpdateIssueResponse,
         UpdateIssueStatusRequest, UpdateIssueStatusResponse, WorkflowStatusesByCategory,
@@ -300,6 +300,283 @@ pub async fn list_my_issues(
         .into_response()
 }
 
+pub async fn bulk_my_issues(
+    pool: &PgPool,
+    user_id: uuid::Uuid,
+    req: BulkMyIssuesRequest,
+) -> impl IntoResponse + use<> {
+    let n_ops = req.archive.is_some() as u8
+        + req.set_status.is_some() as u8
+        + req.set_priority.is_some() as u8;
+    if n_ops != 1 {
+        return (
+            StatusCode::BAD_REQUEST,
+            "specify exactly one of archive, set_status, set_priority",
+        )
+            .into_response();
+    }
+
+    if let Some(arch) = req.archive {
+        let ids: Vec<uuid::Uuid> = arch.issue_ids.into_iter().collect::<HashSet<_>>().into_iter().collect();
+        if ids.is_empty() {
+            return (StatusCode::BAD_REQUEST, "issue_ids required").into_response();
+        }
+        let eligible = match issues_repo::count_issues_eligible_for_member_action(pool, user_id, &ids).await {
+            Ok(n) => n,
+            Err(e) => {
+                eprintln!("bulk_my_issues archive eligible error: {e:?}");
+                return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+            }
+        };
+        if eligible != ids.len() as i64 {
+            return (
+                StatusCode::BAD_REQUEST,
+                "invalid issue id, already archived, or not permitted",
+            )
+                .into_response();
+        }
+        let n = match issues_repo::archive_issues_for_member(pool, user_id, &ids).await {
+            Ok(n) => n,
+            Err(e) => {
+                eprintln!("bulk_my_issues archive error: {e:?}");
+                return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+            }
+        };
+        return (
+            StatusCode::OK,
+            Json(BulkMyIssuesResponse { updated: n as i64 }),
+        )
+            .into_response();
+    }
+
+    if let Some(st) = req.set_status {
+    let ids: Vec<uuid::Uuid> = st
+        .issue_ids
+        .into_iter()
+        .collect::<HashSet<_>>()
+        .into_iter()
+        .collect();
+    if ids.is_empty() {
+        return (StatusCode::BAD_REQUEST, "issue_ids required").into_response();
+    }
+    let rows = match issues_repo::fetch_issues_id_project_archived(pool, &ids).await {
+        Ok(r) => r,
+        Err(e) => {
+            eprintln!("bulk_my_issues fetch issues error: {e:?}");
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
+    };
+    if rows.len() != ids.len() {
+        return (StatusCode::BAD_REQUEST, "unknown issue id").into_response();
+    }
+    let first_pid = rows[0].project_id;
+    if rows.iter().any(|r| r.archived_at.is_some()) {
+        return (
+            StatusCode::BAD_REQUEST,
+            "cannot change status of archived issues",
+        )
+            .into_response();
+    }
+    let eligible = match issues_repo::count_issues_eligible_for_member_action(pool, user_id, &ids)
+        .await
+    {
+        Ok(n) => n,
+        Err(e) => {
+            eprintln!("bulk_my_issues status eligible error: {e:?}");
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
+    };
+    if eligible != ids.len() as i64 {
+        return (StatusCode::BAD_REQUEST, "not permitted to update one or more issues").into_response();
+    }
+
+    let slug_opt = st
+        .workflow_status_slug
+        .as_ref()
+        .map(|s| s.trim())
+        .filter(|s| !s.is_empty())
+        .map(|s| s.to_string());
+
+    match (st.workflow_status_id, slug_opt) {
+        (Some(wid), None) => {
+            if rows.iter().any(|r| r.project_id != first_pid) {
+                return (
+                    StatusCode::BAD_REQUEST,
+                    "all issues must belong to the same project when using workflow_status_id",
+                )
+                    .into_response();
+            }
+            match issues_repo::status_belongs_to_project(pool, first_pid, wid).await {
+                Ok(true) => {}
+                Ok(false) => {
+                    return (StatusCode::BAD_REQUEST, "workflow_status_id not in project").into_response();
+                }
+                Err(e) => {
+                    eprintln!("bulk_my_issues status belongs error: {e:?}");
+                    return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+                }
+            }
+            for id in &ids {
+                if let Err(e) = issues_repo::set_issue_workflow_status(pool, *id, wid).await {
+                    eprintln!("bulk_my_issues set status error: {e:?}");
+                    return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+                }
+            }
+        }
+        (None, Some(slug)) => {
+            for row in &rows {
+                let resolved = match issues_repo::resolve_status_id_by_slug(pool, row.project_id, &slug)
+                    .await
+                {
+                    Ok(v) => v,
+                    Err(e) => {
+                        eprintln!("bulk_my_issues resolve slug error: {e:?}");
+                        return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+                    }
+                };
+                let Some(wid) = resolved else {
+                    return (
+                        StatusCode::BAD_REQUEST,
+                        "workflow_status_slug not found in project for one or more issues",
+                    )
+                        .into_response();
+                };
+                if let Err(e) =
+                    issues_repo::set_issue_workflow_status(pool, row.id, wid).await
+                {
+                    eprintln!("bulk_my_issues set status error: {e:?}");
+                    return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+                }
+            }
+        }
+        _ => {
+            return (
+                StatusCode::BAD_REQUEST,
+                "specify exactly one of workflow_status_id or workflow_status_slug",
+            )
+                .into_response();
+        }
+    }
+
+    return (
+        StatusCode::OK,
+        Json(BulkMyIssuesResponse {
+            updated: ids.len() as i64,
+        }),
+    )
+    .into_response();
+    }
+
+    if let Some(pr) = req.set_priority {
+        let ids: Vec<uuid::Uuid> = pr
+            .issue_ids
+            .into_iter()
+            .collect::<HashSet<_>>()
+            .into_iter()
+            .collect();
+        if ids.is_empty() {
+            return (StatusCode::BAD_REQUEST, "issue_ids required").into_response();
+        }
+        let priority = pr.priority.trim();
+        let allowed = ["critical", "high", "medium", "low"];
+        if !allowed.contains(&priority) {
+            return (StatusCode::BAD_REQUEST, "invalid priority").into_response();
+        }
+        let rows = match issues_repo::fetch_issues_id_project_archived(pool, &ids).await {
+            Ok(r) => r,
+            Err(e) => {
+                eprintln!("bulk_my_issues fetch issues error: {e:?}");
+                return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+            }
+        };
+        if rows.len() != ids.len() {
+            return (StatusCode::BAD_REQUEST, "unknown issue id").into_response();
+        }
+        if rows.iter().any(|r| r.archived_at.is_some()) {
+            return (
+                StatusCode::BAD_REQUEST,
+                "cannot change priority of archived issues",
+            )
+                .into_response();
+        }
+        let eligible = match issues_repo::count_issues_eligible_for_member_action(pool, user_id, &ids)
+            .await
+        {
+            Ok(n) => n,
+            Err(e) => {
+                eprintln!("bulk_my_issues priority eligible error: {e:?}");
+                return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+            }
+        };
+        if eligible != ids.len() as i64 {
+            return (StatusCode::BAD_REQUEST, "not permitted to update one or more issues").into_response();
+        }
+        for id in &ids {
+            if let Err(e) = issues_repo::set_issue_priority(pool, *id, priority).await {
+                eprintln!("bulk_my_issues set priority error: {e:?}");
+                return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+            }
+        }
+        return (
+            StatusCode::OK,
+            Json(BulkMyIssuesResponse {
+                updated: ids.len() as i64,
+            }),
+        )
+            .into_response();
+    }
+
+    (
+        StatusCode::BAD_REQUEST,
+        "invalid bulk request",
+    )
+        .into_response()
+}
+
+pub async fn delete_issue_by_key(
+    pool: &PgPool,
+    org_slug: String,
+    issue_key: String,
+    user_id: uuid::Uuid,
+) -> impl IntoResponse + use<> {
+    let (project_key_raw, key_seq) = match parse_issue_key(&issue_key) {
+        Some(v) => v,
+        None => return (StatusCode::BAD_REQUEST, "invalid issue key").into_response(),
+    };
+    let project_key_owned = project_key_raw.to_ascii_uppercase();
+
+    let org_id = match orgs_repo::find_org_id_by_slug(pool, &org_slug).await {
+        Ok(Some(id)) => id,
+        Ok(None) => return StatusCode::NOT_FOUND.into_response(),
+        Err(e) => {
+            eprintln!("delete_issue_by_key org resolve error: {e:?}");
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
+    };
+
+    let n = match issues_repo::delete_archived_issue_by_org_key(
+        pool,
+        org_id,
+        &project_key_owned,
+        key_seq,
+        user_id,
+    )
+    .await
+    {
+        Ok(n) => n,
+        Err(e) => {
+            eprintln!("delete_issue_by_key delete error: {e:?}");
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
+    };
+
+    if n == 0 {
+        return StatusCode::NOT_FOUND.into_response();
+    }
+
+    StatusCode::NO_CONTENT.into_response()
+}
+
 // --- Project lists ----------------------------------------------------------
 
 pub async fn list_issues(
@@ -337,6 +614,7 @@ pub async fn list_issues(
     };
     let limit: i64 = q.limit.unwrap_or(50).clamp(1, 200);
     let offset: i64 = q.offset.unwrap_or(0).max(0);
+    let list_archived = q.archived.unwrap_or(false);
 
     let rows = match issues_repo::list_issue_summaries_for_project(
         pool,
@@ -344,6 +622,7 @@ pub async fn list_issues(
         status_filter,
         assignee_filter,
         q_filter,
+        list_archived,
         limit,
         offset,
     )
@@ -411,6 +690,7 @@ pub async fn list_project_issues_by_key(
     };
     let limit: i64 = q.limit.unwrap_or(50).clamp(1, 200);
     let offset: i64 = q.offset.unwrap_or(0).max(0);
+    let list_archived = q.archived.unwrap_or(false);
 
     let total: i64 = match issues_repo::count_issues_for_project_filtered(
         pool,
@@ -418,6 +698,7 @@ pub async fn list_project_issues_by_key(
         status_filter.clone(),
         assignee_filter,
         q_filter.clone(),
+        list_archived,
     )
     .await
     {
@@ -434,6 +715,7 @@ pub async fn list_project_issues_by_key(
         status_filter,
         assignee_filter,
         q_filter,
+        list_archived,
         limit,
         offset,
     )
@@ -502,6 +784,18 @@ pub async fn update_issue_status(
     };
     if !is_member {
         return StatusCode::FORBIDDEN.into_response();
+    }
+
+    match issues_repo::get_issue_archived_state(pool, issue_id).await {
+        Ok(None) => return StatusCode::NOT_FOUND.into_response(),
+        Ok(Some(Some(_))) => {
+            return (StatusCode::BAD_REQUEST, "issue is archived").into_response();
+        }
+        Ok(Some(None)) => {}
+        Err(e) => {
+            eprintln!("update_issue_status archived check error: {e:?}");
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
     }
 
     let workflow_status_id = if let Some(wid) = req.workflow_status_id {
@@ -594,6 +888,10 @@ pub async fn update_issue(
     };
     if !is_member {
         return StatusCode::FORBIDDEN.into_response();
+    }
+
+    if issue_row.archived_at.is_some() {
+        return (StatusCode::BAD_REQUEST, "issue is archived").into_response();
     }
 
     let allowed_priorities = ["critical", "high", "medium", "low"];
@@ -792,6 +1090,18 @@ pub async fn update_issue_board_position(
         return StatusCode::FORBIDDEN.into_response();
     }
 
+    match issues_repo::get_issue_archived_state(pool, issue_id).await {
+        Ok(None) => return StatusCode::NOT_FOUND.into_response(),
+        Ok(Some(Some(_))) => {
+            return (StatusCode::BAD_REQUEST, "issue is archived").into_response();
+        }
+        Ok(Some(None)) => {}
+        Err(e) => {
+            eprintln!("update_issue_board_position archived check error: {e:?}");
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
+    }
+
     match issues_repo::status_belongs_to_project(pool, project_id, req.workflow_status_id).await {
         Ok(true) => {}
         Ok(false) => return (StatusCode::BAD_REQUEST, "status not in project").into_response(),
@@ -850,6 +1160,7 @@ fn detail_from_row(row: issues_repo::IssueFullRow) -> IssueDetailResponse {
         project_id: row.project_id,
         created_at: row.created_at,
         updated_at: row.updated_at,
+        archived_at: row.archived_at,
     }
 }
 

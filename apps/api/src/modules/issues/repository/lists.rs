@@ -55,10 +55,16 @@ pub async fn list_issue_summaries_for_project(
     workflow_status_filter: Option<Uuid>,
     assignee_filter: Option<Uuid>,
     q_filter: Option<String>,
+    list_archived: bool,
     limit: i64,
     offset: i64,
 ) -> Result<Vec<IssueSummaryRow>, sqlx::Error> {
-    sqlx::query_as::<_, IssueSummaryRow>(
+    let archived_cond = if list_archived {
+        "i.archived_at IS NOT NULL"
+    } else {
+        "i.archived_at IS NULL"
+    };
+    let query = format!(
         r#"
         SELECT
             i.id,
@@ -75,6 +81,7 @@ pub async fn list_issue_summaries_for_project(
         FROM issues i
         JOIN project_workflow_statuses pws ON pws.id = i.workflow_status_id
         WHERE i.project_id = $1
+            AND ({archived_cond})
             AND ($2::uuid IS NULL OR i.workflow_status_id = $2)
             AND ($3::uuid IS NULL OR i.assignee_id = $3)
             AND (
@@ -85,8 +92,9 @@ pub async fn list_issue_summaries_for_project(
         ORDER BY i.key_seq DESC
         LIMIT $5
         OFFSET $6
-        "#,
-    )
+        "#
+    );
+    sqlx::query_as::<_, IssueSummaryRow>(&query)
     .bind(project_id)
     .bind(workflow_status_filter)
     .bind(assignee_filter)
@@ -103,12 +111,19 @@ pub async fn count_issues_for_project_filtered(
     workflow_status_filter: Option<Uuid>,
     assignee_filter: Option<Uuid>,
     q_filter: Option<String>,
+    list_archived: bool,
 ) -> Result<i64, sqlx::Error> {
-    let c: i64 = sqlx::query_scalar(
+    let archived_cond = if list_archived {
+        "i.archived_at IS NOT NULL"
+    } else {
+        "i.archived_at IS NULL"
+    };
+    let query = format!(
         r#"
         SELECT COUNT(*)::bigint
         FROM issues i
         WHERE i.project_id = $1
+            AND ({archived_cond})
             AND ($2::uuid IS NULL OR i.workflow_status_id = $2)
             AND ($3::uuid IS NULL OR i.assignee_id = $3)
             AND (
@@ -116,8 +131,9 @@ pub async fn count_issues_for_project_filtered(
                 OR i.title ILIKE '%' || $4 || '%'
                 OR COALESCE(i.description, '') ILIKE '%' || $4 || '%'
             )
-        "#,
-    )
+        "#
+    );
+    let c: i64 = sqlx::query_scalar(&query)
     .bind(project_id)
     .bind(workflow_status_filter)
     .bind(assignee_filter)
@@ -148,6 +164,7 @@ pub async fn list_board_issues_by_key_seq(
         FROM issues i
         JOIN project_workflow_statuses pws ON pws.id = i.workflow_status_id
         WHERE i.project_id = $1
+          AND i.archived_at IS NULL
         ORDER BY i.key_seq DESC
         "#,
     )
@@ -177,6 +194,7 @@ pub async fn list_board_issues_by_board_order(
         FROM issues i
         JOIN project_workflow_statuses pws ON pws.id = i.workflow_status_id
         WHERE i.project_id = $1
+          AND i.archived_at IS NULL
         ORDER BY i.board_order ASC, i.key_seq DESC
         "#,
     )

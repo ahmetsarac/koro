@@ -84,6 +84,8 @@ pub struct ListIssuesQuery {
     pub assignee: Option<String>,
     pub limit: Option<i64>,
     pub offset: Option<i64>,
+    /// When `true`, list only archived issues; default is active only.
+    pub archived: Option<bool>,
 }
 
 #[derive(Deserialize, IntoParams, ToSchema)]
@@ -238,6 +240,38 @@ pub struct UpdateIssueResponse {
     pub priority: String,
 }
 
+#[derive(Deserialize, ToSchema)]
+pub struct BulkArchiveIssues {
+    pub issue_ids: Vec<Uuid>,
+}
+
+#[derive(Deserialize, ToSchema)]
+pub struct BulkSetIssueStatus {
+    pub issue_ids: Vec<Uuid>,
+    /// When all selected issues belong to one project, you may send this UUID.
+    pub workflow_status_id: Option<Uuid>,
+    /// When issues span multiple projects, send the status **slug**; each issue is updated to that project’s status row with the same slug.
+    pub workflow_status_slug: Option<String>,
+}
+
+#[derive(Deserialize, ToSchema)]
+pub struct BulkSetIssuePriority {
+    pub issue_ids: Vec<Uuid>,
+    pub priority: String,
+}
+
+#[derive(Deserialize, ToSchema)]
+pub struct BulkMyIssuesRequest {
+    pub archive: Option<BulkArchiveIssues>,
+    pub set_status: Option<BulkSetIssueStatus>,
+    pub set_priority: Option<BulkSetIssuePriority>,
+}
+
+#[derive(Serialize, ToSchema)]
+pub struct BulkMyIssuesResponse {
+    pub updated: i64,
+}
+
 #[derive(Serialize, ToSchema, Clone)]
 pub struct BoardColumnDef {
     pub id: Uuid,
@@ -285,6 +319,8 @@ pub struct IssueDetailResponse {
     pub project_id: Uuid,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub archived_at: Option<DateTime<Utc>>,
 }
 
 #[derive(Deserialize, ToSchema)]

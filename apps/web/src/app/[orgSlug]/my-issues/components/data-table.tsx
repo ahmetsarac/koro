@@ -510,7 +510,9 @@ export function DataTable({ orgSlug, columns, filterType }: DataTableProps) {
   }, [orgSlug, sorting, columnFilters, filterType])
 
   const rows = table.getRowModel().rows
-  const selectedCount = table.getSelectedRowModel().rows.length
+  const selectedIssues = table
+    .getSelectedRowModel()
+    .rows.map((r) => r.original)
   const visibleColumnCount =
     table.getVisibleLeafColumns().length || columns.length
   const { allBoardColumns, boardItems, statusMetaByProjectAndSlug } =
@@ -920,8 +922,10 @@ export function DataTable({ orgSlug, columns, filterType }: DataTableProps) {
         {view === "list" ? (
           <>
             <DataTableSelectionOverlay
-              selectedCount={selectedCount}
+              orgSlug={orgSlug}
+              selectedIssues={selectedIssues}
               onClearSelection={() => table.resetRowSelection()}
+              onSuccess={refetchIssues}
             />
 
             <div

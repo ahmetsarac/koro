@@ -1,3 +1,4 @@
+use chrono::{DateTime, Utc};
 use serde_json::Value;
 use sqlx::PgPool;
 use uuid::Uuid;
@@ -14,6 +15,19 @@ pub async fn set_issue_workflow_status(
     .bind(issue_id)
     .execute(pool)
     .await?;
+    Ok(())
+}
+
+pub async fn set_issue_priority(
+    pool: &PgPool,
+    issue_id: Uuid,
+    priority: &str,
+) -> Result<(), sqlx::Error> {
+    sqlx::query(r#"UPDATE issues SET priority = $1, updated_at = NOW() WHERE id = $2"#)
+        .bind(priority)
+        .bind(issue_id)
+        .execute(pool)
+        .await?;
     Ok(())
 }
 
@@ -179,4 +193,130 @@ pub async fn insert_unassigned_event(
     .execute(pool)
     .await?;
     Ok(())
+}
+
+/// `None` if issue missing; `Some(None)` if active; `Some(Some(t))` if archived.
+pub async fn get_issue_archived_state(
+    pool: &PgPool,
+    issue_id: Uuid,
+) -> Result<Option<Option<DateTime<Utc>>>, sqlx::Error> {
+    sqlx::query_scalar::<_, Option<DateTime<Utc>>>(
+        "SELECT archived_at FROM issues WHERE id = $1",
+    )
+    .bind(issue_id)
+    .fetch_optional(pool)
+    .await
+}
+
+/// Returns how many rows matched `issue_ids` and were archived (active + project member).
+pub async fn archive_issues_for_member(
+    pool: &PgPool,
+    user_id: Uuid,
+    issue_ids: &[Uuid],
+) -> Result<u64, sqlx::Error> {
+    if issue_ids.is_empty() {
+        return Ok(0);
+    }
+    let res = sqlx::query(
+        r#"
+        UPDATE issues i
+        SET archived_at = NOW(), updated_at = NOW()
+        WHERE i.id = ANY($1)
+          AND i.archived_at IS NULL
+          AND EXISTS (
+            SELECT 1 FROM project_members pm
+            WHERE pm.project_id = i.project_id AND pm.user_id = $2
+          )
+        "#,
+    )
+    .bind(issue_ids)
+    .bind(user_id)
+    .execute(pool)
+    .await?;
+    Ok(res.rows_affected())
+}
+
+/// Expected count: issues that exist, are active, and user is a project member.
+pub async fn count_issues_eligible_for_member_action(
+    pool: &PgPool,
+    user_id: Uuid,
+    issue_ids: &[Uuid],
+) -> Result<i64, sqlx::Error> {
+    if issue_ids.is_empty() {
+        return Ok(0);
+    }
+    let c: i64 = sqlx::query_scalar(
+        r#"
+        SELECT COUNT(*)::bigint
+        FROM issues i
+        WHERE i.id = ANY($1)
+          AND i.archived_at IS NULL
+          AND EXISTS (
+            SELECT 1 FROM project_members pm
+            WHERE pm.project_id = i.project_id AND pm.user_id = $2
+          )
+        "#,
+    )
+    .bind(issue_ids)
+    .bind(user_id)
+    .fetch_one(pool)
+    .await?;
+    Ok(c)
+}
+
+#[derive(sqlx::FromRow)]
+pub struct IssueIdProjectArchivedRow {
+    pub id: Uuid,
+    pub project_id: Uuid,
+    pub archived_at: Option<DateTime<Utc>>,
+}
+
+pub async fn fetch_issues_id_project_archived(
+    pool: &PgPool,
+    issue_ids: &[Uuid],
+) -> Result<Vec<IssueIdProjectArchivedRow>, sqlx::Error> {
+    if issue_ids.is_empty() {
+        return Ok(Vec::new());
+    }
+    sqlx::query_as::<_, IssueIdProjectArchivedRow>(
+        r#"
+        SELECT i.id, i.project_id, i.archived_at
+        FROM issues i
+        WHERE i.id = ANY($1)
+        "#,
+    )
+    .bind(issue_ids)
+    .fetch_all(pool)
+    .await
+}
+
+pub async fn delete_archived_issue_by_org_key(
+    pool: &PgPool,
+    org_id: Uuid,
+    project_key: &str,
+    key_seq: i32,
+    user_id: Uuid,
+) -> Result<u64, sqlx::Error> {
+    let res = sqlx::query(
+        r#"
+        DELETE FROM issues i
+        USING projects p
+        WHERE i.project_id = p.id
+          AND p.org_id = $1
+          AND p.project_key = $2
+          AND i.key_seq = $3
+          AND i.archived_at IS NOT NULL
+          AND EXISTS (
+            SELECT 1 FROM project_members pm
+            WHERE pm.project_id = i.project_id AND pm.user_id = $4
+          )
+        "#,
+    )
+    .bind(org_id)
+    .bind(project_key)
+    .bind(key_seq)
+    .bind(user_id)
+    .execute(pool)
+    .await?;
+    Ok(res.rows_affected())
 }

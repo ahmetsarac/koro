@@ -261,6 +261,11 @@ pub fn apply_my_issues_cursor_filter(
     Ok(())
 }
 
+/// Active issues only (excludes archived).
+fn push_non_archived_only(builder: &mut QueryBuilder<Postgres>) {
+    builder.push(" AND i.archived_at IS NULL");
+}
+
 fn push_my_issues_user_filter(
     builder: &mut QueryBuilder<Postgres>,
     user_id: uuid::Uuid,
@@ -293,6 +298,7 @@ pub async fn fetch_facets(
         "SELECT DISTINCT i.project_id FROM issues i WHERE ",
     );
     push_my_issues_user_filter(&mut project_qb, user_id, filter_type);
+    push_non_archived_only(&mut project_qb);
     apply_my_issues_filters(&mut project_qb, query, Some("status"));
     push_org_scope_for_issue_i(&mut project_qb, org_scope);
     let project_ids: Vec<uuid::Uuid> = project_qb
@@ -335,6 +341,7 @@ pub async fn fetch_facets(
             "SELECT i.workflow_status_id, COUNT(*)::bigint AS count FROM issues i WHERE ",
         );
         push_my_issues_user_filter(&mut count_qb, user_id, filter_type);
+        push_non_archived_only(&mut count_qb);
         apply_my_issues_filters(&mut count_qb, query, None);
         push_org_scope_for_issue_i(&mut count_qb, org_scope);
         count_qb.push(" GROUP BY i.workflow_status_id");
@@ -365,6 +372,7 @@ pub async fn fetch_facets(
         "SELECT i.priority as value, COUNT(*) as count FROM issues i WHERE ",
     );
     push_my_issues_user_filter(&mut priority_builder, user_id, filter_type);
+    push_non_archived_only(&mut priority_builder);
     apply_my_issues_filters(&mut priority_builder, query, Some("priority"));
     push_org_scope_for_issue_i(&mut priority_builder, org_scope);
     priority_builder.push(" GROUP BY i.priority");
@@ -379,6 +387,7 @@ pub async fn fetch_facets(
     let mut rel_blocked_qb =
         QueryBuilder::<Postgres>::new("SELECT COUNT(*)::bigint FROM issues i WHERE ");
     push_my_issues_user_filter(&mut rel_blocked_qb, user_id, filter_type);
+    push_non_archived_only(&mut rel_blocked_qb);
     apply_my_issues_filters(&mut rel_blocked_qb, query, Some("relations"));
     push_org_scope_for_issue_i(&mut rel_blocked_qb, org_scope);
     rel_blocked_qb.push(
@@ -392,6 +401,7 @@ pub async fn fetch_facets(
     let mut rel_blocking_qb =
         QueryBuilder::<Postgres>::new("SELECT COUNT(*)::bigint FROM issues i WHERE ");
     push_my_issues_user_filter(&mut rel_blocking_qb, user_id, filter_type);
+    push_non_archived_only(&mut rel_blocking_qb);
     apply_my_issues_filters(&mut rel_blocking_qb, query, Some("relations"));
     push_org_scope_for_issue_i(&mut rel_blocking_qb, org_scope);
     rel_blocking_qb.push(
@@ -414,6 +424,7 @@ pub async fn count_filtered(
     let filter_type = query.filter_type.as_deref();
     let mut count_query = QueryBuilder::<Postgres>::new("SELECT COUNT(*) FROM issues i WHERE ");
     push_my_issues_user_filter(&mut count_query, user_id, filter_type);
+    push_non_archived_only(&mut count_query);
     apply_my_issues_filters(&mut count_query, query, None);
     push_org_scope_for_issue_i(&mut count_query, org_scope);
     count_query.build_query_scalar::<i64>().fetch_one(pool).await
@@ -447,6 +458,7 @@ pub async fn fetch_item_rows(
            WHERE "#,
     );
     push_my_issues_user_filter(&mut items_query, user_id, filter_type);
+    push_non_archived_only(&mut items_query);
     apply_my_issues_filters(&mut items_query, query, None);
     if let Some(org_id) = org_scope {
         items_query.push(" AND p.org_id = ");

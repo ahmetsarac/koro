@@ -105,10 +105,12 @@ pub async fn health(State(state): State<AppState>) -> impl IntoResponse {
         auth_handlers::refresh,
         issues_handlers::create_issue,
         issues_handlers::list_my_issues,
+        issues_handlers::bulk_my_issues,
         issues_handlers::list_issues,
         issues_handlers::list_project_issues_by_key,
         issues_handlers::update_issue_status,
         issues_handlers::update_issue,
+        issues_handlers::delete_issue_by_key,
         issues_handlers::get_board,
         issues_handlers::get_board_by_key,
         issues_handlers::list_workflow_statuses,
@@ -175,6 +177,11 @@ pub async fn health(State(state): State<AppState>) -> impl IntoResponse {
         crate::modules::issues::models::UpdateIssueStatusResponse,
         crate::modules::issues::models::UpdateIssueRequest,
         crate::modules::issues::models::UpdateIssueResponse,
+        crate::modules::issues::models::BulkArchiveIssues,
+        crate::modules::issues::models::BulkSetIssueStatus,
+        crate::modules::issues::models::BulkSetIssuePriority,
+        crate::modules::issues::models::BulkMyIssuesRequest,
+        crate::modules::issues::models::BulkMyIssuesResponse,
         crate::modules::issues::models::BoardColumnDef,
         crate::modules::issues::models::BoardResponse,
         crate::modules::issues::models::CreateWorkflowStatusRequest,
@@ -233,6 +240,10 @@ pub fn router(state: AppState) -> Router {
         )
         .route("/me", get(users_handlers::get_me))
         .route("/my-issues", get(issues_handlers::list_my_issues))
+        .route(
+            "/my-issues/bulk",
+            post(issues_handlers::bulk_my_issues),
+        )
         .route("/projects", get(projects_handlers::list_projects))
         .route("/setup", post(users_handlers::setup))
         .route("/orgs", post(orgs_handlers::create_org))
@@ -294,7 +305,9 @@ pub fn router(state: AppState) -> Router {
         .route("/issues/{issueId}", get(issues_handlers::get_issue))
         .route(
             "/orgs/{orgSlug}/issues/{issueKey}",
-            get(issues_handlers::get_issue_by_key).patch(issues_handlers::update_issue),
+            get(issues_handlers::get_issue_by_key)
+                .patch(issues_handlers::update_issue)
+                .delete(issues_handlers::delete_issue_by_key),
         )
         .route(
             "/orgs/{orgSlug}/issues/{issueKey}/relations",
