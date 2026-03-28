@@ -92,6 +92,8 @@ export interface NewIssueModalProps {
   initialProjectName?: string
   /** Workflow status UUID (e.g. from project Kanban column). */
   initialWorkflowStatusId?: string
+  /** Status slug (e.g. My Issues board column id). Resolved before category. */
+  initialWorkflowSlug?: string
   /** First status in this category when user picks a project (e.g. My Issues board). */
   initialWorkflowCategory?: string
 }
@@ -103,6 +105,7 @@ export function NewIssueModal({
   initialProjectKey,
   initialProjectName,
   initialWorkflowStatusId: initialWorkflowStatusIdProp,
+  initialWorkflowSlug: initialWorkflowSlugProp,
   initialWorkflowCategory: initialWorkflowCategoryProp,
 }: NewIssueModalProps) {
   const [projects, setProjects] = React.useState<Project[]>([])
@@ -188,6 +191,15 @@ export function NewIssueModal({
       setWorkflowStatusId(initialWorkflowStatusIdProp)
       return
     }
+    if (initialWorkflowSlugProp) {
+      const bySlug = workflowOptions.find(
+        (o) => o.slug === initialWorkflowSlugProp
+      )
+      if (bySlug) {
+        setWorkflowStatusId(bySlug.id)
+        return
+      }
+    }
     if (initialWorkflowCategoryProp) {
       const first = workflowOptions.find(
         (o) => o.category === initialWorkflowCategoryProp
@@ -203,6 +215,7 @@ export function NewIssueModal({
   }, [
     open,
     initialWorkflowStatusIdProp,
+    initialWorkflowSlugProp,
     initialWorkflowCategoryProp,
     workflowOptions,
   ])

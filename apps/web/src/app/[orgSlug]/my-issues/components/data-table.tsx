@@ -513,71 +513,148 @@ export function DataTable({ orgSlug, columns, filterType }: DataTableProps) {
   const selectedCount = table.getSelectedRowModel().rows.length
   const visibleColumnCount =
     table.getVisibleLeafColumns().length || columns.length
-  const { allBoardColumns, boardItems, statusMetaByWorkflowId } = React.useMemo(() => {
-    type StatusMeta = {
-      workflow_status_id: string
-      status_name: string
-      status_category: string
-      status_slug: string
-      project_id: string
-    }
-    const facetStatuses = facets?.status ?? []
-    const seenFacet = new Set(facetStatuses.map((f) => f.workflow_status_id))
-    const orphanFromRows = []
-    for (const row of rows) {
-      const it = row.original
-      if (!seenFacet.has(it.workflow_status_id)) {
-        orphanFromRows.push({
-          workflow_status_id: it.workflow_status_id,
-          project_id: it.project_id,
-          name: it.status_name,
-          slug: it.status,
-          category: it.status_category,
-          position: 999_999,
-          count: 0,
-        })
-        seenFacet.add(it.workflow_status_id)
+  const { allBoardColumns, boardItems, statusMetaByProjectAndSlug } =
+    React.useMemo(() => {
+      type StatusMeta = {
+        workflow_status_id: string
+        status_name: string
+        status_category: string
+        status_slug: string
+        project_id: string
       }
-    }
-    const combined = [...facetStatuses, ...orphanFromRows]
-    const sorted = [...combined].sort((a, b) => {
-      const rc = categoryRank(a.category) - categoryRank(b.category)
-      if (rc !== 0) return rc
-      if (a.position !== b.position) return a.position - b.position
-      return a.name.localeCompare(b.name)
-    })
-    const cols = sorted.map((m) => ({
-      id: m.workflow_status_id,
-      label: m.name,
-      icon: iconForIssueCategory(m.category),
-      projectId: m.project_id,
-    }))
-    const byId = new Map<string, StatusMeta>()
-    for (const m of sorted) {
-      byId.set(m.workflow_status_id, {
-        workflow_status_id: m.workflow_status_id,
-        status_name: m.name,
-        status_category: m.category,
-        status_slug: m.slug,
-        project_id: m.project_id,
+      type FacetRow = {
+        workflow_status_id: string
+        project_id: string
+        name: string
+        slug: string
+        category: string
+        position: number
+        count: number
+      }
+      const facetStatuses = facets?.status ?? []
+      const seenFacet = new Set(facetStatuses.map((f) => f.workflow_status_id))
+      const orphanFromRows: FacetRow[] = []
+      for (const row of rows) {
+        const it = row.original
+        if (!seenFacet.has(it.workflow_status_id)) {
+          orphanFromRows.push({
+            workflow_status_id: it.workflow_status_id,
+            project_id: it.project_id,
+            name: it.status_name,
+            slug: it.status,
+            category: it.status_category,
+            position: 999_999,
+            count: 0,
+          })
+          seenFacet.add(it.workflow_status_id)
+        }
+      }
+      const combined: FacetRow[] = [...facetStatuses, ...orphanFromRows]
+      const sorted = [...combined].sort((a, b) => {
+        const rc = categoryRank(a.category) - categoryRank(b.category)
+        if (rc !== 0) return rc
+        if (a.position !== b.position) return a.position - b.position
+        return a.name.localeCompare(b.name)
       })
-    }
-    const grouped: Record<string, Issue[]> = {}
-    for (const c of cols) {
-      grouped[c.id] = []
-    }
-    for (const row of rows) {
-      const it = row.original
-      const k = it.workflow_status_id
-      if (!grouped[k]) grouped[k] = []
-      grouped[k].push(it)
-    }
-    return {
-      allBoardColumns: cols,
-      boardItems: grouped,
-      statusMetaByWorkflowId: byId,
-    }
-  }, [facets, rows])
+
+      const bySlug = new Map<string, FacetRow[]>()
+      for (const m of sorted) {
+        const arr = bySlug.get(m.slug) ?? []
+        arr.push(m)
+        bySlug.set(m.slug, arr)
+      }
+
+      const slugKeys = [...bySlug.keys()].sort((a, b) => {
+        const ga = bySlug.get(a)!
+        const gb = bySlug.get(b)!
+        const ra =
+          categoryRank(ga[0].category) - categoryRank(gb[0].category)
+        if (ra !== 0) return ra
+        const pa = Math.min(...ga.map((x) => x.position))
+        const pb = Math.min(...gb.map((x) => x.position))
+        if (pa !== pb) return pa - pb
+        return a.localeCompare(b)
+      })
+
+      const cols = slugKeys.map((slug) => {
+        const group = bySlug.get(slug)!
+        const representative = group.reduce((best, cur) =>
+          cur.count > best.count ? cur : best
+        )
+        return {
+          id: slug,
+          label: representative.name,
+          icon: iconForIssueCategory(representative.category),
+        }
+      })
+
+      const byProjectAndSlug = new Map<string, StatusMeta>()
+      for (const m of sorted) {
+        const pk = `${m.project_id}:${m.slug}`
+        if (!byProjectAndSlug.has(pk)) {
+          byProjectAndSlug.set(pk, {
+            workflow_status_id: m.workflow_status_id,
+            status_name: m.name,
+            status_category: m.category,
+            status_slug: m.slug,
+            project_id: m.project_id,
+          })
+        }
+      }
+
+      const grouped: Record<string, Issue[]> = {}
+      for (const c of cols) {
+        grouped[c.id] = []
+      }
+
+      for (const row of rows) {
+        const it = row.original
+        const slug = it.status
+        if (!grouped[slug]) {
+          grouped[slug] = []
+          cols.push({
+            id: slug,
+            label: it.status_name,
+            icon: iconForIssueCategory(it.status_category),
+          })
+          const pk = `${it.project_id}:${slug}`
+          if (!byProjectAndSlug.has(pk)) {
+            byProjectAndSlug.set(pk, {
+              workflow_status_id: it.workflow_status_id,
+              status_name: it.status_name,
+              status_category: it.status_category,
+              status_slug: slug,
+              project_id: it.project_id,
+            })
+          }
+        }
+        grouped[slug].push(it)
+      }
+
+      const appended = cols.slice(slugKeys.length)
+      if (appended.length > 0) {
+        appended.sort((a, b) => {
+          const ca =
+            rows.find((r) => r.original.status === a.id)?.original
+              .status_category ?? ""
+          const cb =
+            rows.find((r) => r.original.status === b.id)?.original
+              .status_category ?? ""
+          const rc = categoryRank(ca) - categoryRank(cb)
+          if (rc !== 0) return rc
+          return a.id.localeCompare(b.id)
+        })
+        const head = cols.slice(0, slugKeys.length)
+        cols.length = 0
+        cols.push(...head, ...appended)
+      }
+
+      return {
+        allBoardColumns: cols,
+        boardItems: grouped,
+        statusMetaByProjectAndSlug: byProjectAndSlug,
+      }
+    }, [facets, rows])
 
   const visibleBoardColumns = React.useMemo(
     () =>
@@ -732,21 +809,30 @@ export function DataTable({ orgSlug, columns, filterType }: DataTableProps) {
     async ({
       issue,
       issueId,
-      fromColumnId,
       toColumnId,
-      position,
+      columns: columnState,
     }: {
       issue: Issue
       issueId: string
-      fromColumnId: string
       toColumnId: string
-      position: number
+      columns: Record<string, Issue[]>
     }) => {
-      if (fromColumnId === toColumnId) {
-        return true
+      const targetSlug = toColumnId
+      const metaKey = `${issue.project_id}:${targetSlug}`
+      const targetMeta = statusMetaByProjectAndSlug.get(metaKey)
+      if (!targetMeta) {
+        return false
       }
 
-      const targetMeta = statusMetaByWorkflowId.get(toColumnId)
+      const targetColumnOrder = columnState[toColumnId] ?? []
+      const sameProjectOrdered = targetColumnOrder.filter(
+        (i) => i.project_id === issue.project_id
+      )
+      const boardPosition = sameProjectOrdered.findIndex((i) => i.id === issueId)
+      if (boardPosition < 0) {
+        return false
+      }
+
       const previousSnapshot = {
         workflow_status_id: issue.workflow_status_id,
         status_name: issue.status_name,
@@ -754,13 +840,16 @@ export function DataTable({ orgSlug, columns, filterType }: DataTableProps) {
         status: issue.status,
       }
 
-      if (targetMeta) {
+      const statusChanged =
+        issue.workflow_status_id !== targetMeta.workflow_status_id
+
+      if (statusChanged) {
         setItems((prev) =>
           prev.map((item) =>
             item.id === issueId
               ? {
                   ...item,
-                  workflow_status_id: toColumnId,
+                  workflow_status_id: targetMeta.workflow_status_id,
                   status_name: targetMeta.status_name,
                   status_category: targetMeta.status_category,
                   status: targetMeta.status_slug,
@@ -773,8 +862,8 @@ export function DataTable({ orgSlug, columns, filterType }: DataTableProps) {
       try {
         const success = await updateIssueBoardPosition(
           issueId,
-          toColumnId,
-          position
+          targetMeta.workflow_status_id,
+          boardPosition
         )
 
         if (!success) {
@@ -787,10 +876,10 @@ export function DataTable({ orgSlug, columns, filterType }: DataTableProps) {
         }
 
         updateIssueInCaches(issue.display_key, {
-          workflow_status_id: toColumnId,
-          status_name: targetMeta?.status_name,
-          status_category: targetMeta?.status_category,
-          status: targetMeta?.status_slug,
+          workflow_status_id: targetMeta.workflow_status_id,
+          status_name: targetMeta.status_name,
+          status_category: targetMeta.status_category,
+          status: targetMeta.status_slug,
         })
         await refetchIssues()
         return true
@@ -803,7 +892,13 @@ export function DataTable({ orgSlug, columns, filterType }: DataTableProps) {
         return false
       }
     },
-    [refetchIssues, statusMetaByWorkflowId]
+    [refetchIssues, statusMetaByProjectAndSlug]
+  )
+
+  const canIssueEnterBoardColumn = React.useCallback(
+    (issue: Issue, columnId: string) =>
+      statusMetaByProjectAndSlug.has(`${issue.project_id}:${columnId}`),
+    [statusMetaByProjectAndSlug]
   )
 
   return (
@@ -997,14 +1092,19 @@ export function DataTable({ orgSlug, columns, filterType }: DataTableProps) {
                 issueDetailHref(orgSlug, issue.display_key, { from: "my-issues" })
               }
               getIssueProjectId={(issue) => issue.project_id}
+              canIssueEnterColumn={canIssueEnterBoardColumn}
               onHideColumn={hideBoardColumn}
-              onIssueMove={({ issue, issueId, fromColumnId, toColumnId, position }) =>
+              onIssueMove={({
+                issue,
+                issueId,
+                toColumnId,
+                columns: moveColumns,
+              }) =>
                 handleBoardMove({
                   issue,
                   issueId,
-                  fromColumnId,
                   toColumnId,
-                  position,
+                  columns: moveColumns,
                 })
               }
               onReload={refetchIssues}

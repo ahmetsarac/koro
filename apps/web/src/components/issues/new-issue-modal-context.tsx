@@ -26,6 +26,9 @@ export function NewIssueModalProvider({
   const [initialWorkflowStatusId, setInitialWorkflowStatusId] = React.useState<
     string | undefined
   >(undefined)
+  const [initialWorkflowSlug, setInitialWorkflowSlug] = React.useState<
+    string | undefined
+  >(undefined)
   const [initialWorkflowCategory, setInitialWorkflowCategory] = React.useState<
     string | undefined
   >(undefined)
@@ -35,13 +38,16 @@ export function NewIssueModalProvider({
       openNewIssueModal: (hint?: string) => {
         if (!hint) {
           setInitialWorkflowStatusId(undefined)
+          setInitialWorkflowSlug(undefined)
           setInitialWorkflowCategory(undefined)
         } else if (looksLikeUuid(hint)) {
           setInitialWorkflowStatusId(hint)
+          setInitialWorkflowSlug(undefined)
           setInitialWorkflowCategory(undefined)
         } else {
           setInitialWorkflowStatusId(undefined)
-          setInitialWorkflowCategory(hint)
+          setInitialWorkflowSlug(hint)
+          setInitialWorkflowCategory(undefined)
         }
         setOpen(true)
       },
@@ -53,6 +59,7 @@ export function NewIssueModalProvider({
     setOpen(next)
     if (!next) {
       setInitialWorkflowStatusId(undefined)
+      setInitialWorkflowSlug(undefined)
       setInitialWorkflowCategory(undefined)
     }
   }, [])
@@ -66,6 +73,7 @@ export function NewIssueModalProvider({
         orgSlug={orgSlug}
         initialProjectKey={undefined}
         initialWorkflowStatusId={initialWorkflowStatusId}
+        initialWorkflowSlug={initialWorkflowSlug}
         initialWorkflowCategory={initialWorkflowCategory}
       />
     </NewIssueModalContext.Provider>

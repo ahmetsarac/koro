@@ -73,6 +73,11 @@ interface IssueKanbanBoardProps<TIssue extends KanbanIssue> {
   onAddIssue?: (columnId: string) => void
   /** Used with `KanbanColumn.projectId` to block cross-project drops on My Issues. */
   getIssueProjectId?: (issue: TIssue) => string | undefined
+  /**
+   * When set (e.g. My Issues merged columns), columns where this returns false
+   * are non-droppable and shown muted while dragging.
+   */
+  canIssueEnterColumn?: (issue: TIssue, columnId: string) => boolean
   /** My Issues board: column header menu to hide a column. */
   onHideColumn?: (columnId: string) => void
 }
@@ -115,6 +120,7 @@ export function IssueKanbanBoard<TIssue extends KanbanIssue>({
   onReload,
   onAddIssue,
   getIssueProjectId,
+  canIssueEnterColumn,
   onHideColumn,
 }: IssueKanbanBoardProps<TIssue>) {
   const normalizedColumns = React.useMemo(
@@ -205,6 +211,14 @@ export function IssueKanbanBoard<TIssue extends KanbanIssue>({
       getIssueProjectId &&
       activeIssueRow &&
       getIssueProjectId(activeIssueRow) !== targetCol.projectId
+    ) {
+      return
+    }
+
+    if (
+      canIssueEnterColumn &&
+      activeIssueRow &&
+      !canIssueEnterColumn(activeIssueRow, overColumn)
     ) {
       return
     }
@@ -305,6 +319,11 @@ export function IssueKanbanBoard<TIssue extends KanbanIssue>({
       return
     }
 
+    if (canIssueEnterColumn && !canIssueEnterColumn(issue, toColumnId)) {
+      resetColumns()
+      return
+    }
+
     const resolvedPosition = position >= 0 ? position : 0
 
     try {
@@ -386,6 +405,7 @@ export function IssueKanbanBoard<TIssue extends KanbanIssue>({
               columnProjectId={column.projectId}
               activeDragIssue={activeIssue}
               getIssueProjectId={getIssueProjectId}
+              canIssueEnterColumn={canIssueEnterColumn}
               issues={localColumns[column.id] || []}
               emptyMessage={emptyMessage}
               getIssueId={getIssueId}
@@ -423,6 +443,7 @@ interface BoardColumnProps<TIssue extends KanbanIssue> {
   columnProjectId?: string
   activeDragIssue: TIssue | null
   getIssueProjectId?: (issue: TIssue) => string | undefined
+  canIssueEnterColumn?: (issue: TIssue, columnId: string) => boolean
   issues: TIssue[]
   emptyMessage: string
   getIssueId: (issue: TIssue) => string
@@ -441,6 +462,7 @@ function BoardColumn<TIssue extends KanbanIssue>({
   columnProjectId,
   activeDragIssue,
   getIssueProjectId,
+  canIssueEnterColumn,
   issues,
   emptyMessage,
   getIssueId,
@@ -453,10 +475,12 @@ function BoardColumn<TIssue extends KanbanIssue>({
 }: BoardColumnProps<TIssue>) {
   const issueIds = React.useMemo(() => issues.map(getIssueId), [issues, getIssueId])
   const dropDisabled = Boolean(
-    columnProjectId &&
-      activeDragIssue &&
-      getIssueProjectId &&
-      getIssueProjectId(activeDragIssue) !== columnProjectId
+    activeDragIssue &&
+      ((columnProjectId &&
+        getIssueProjectId &&
+        getIssueProjectId(activeDragIssue) !== columnProjectId) ||
+        (canIssueEnterColumn &&
+          !canIssueEnterColumn(activeDragIssue, id)))
   )
   const { setNodeRef: setDroppableRef, isOver } = useDroppable({
     id,
@@ -464,7 +488,13 @@ function BoardColumn<TIssue extends KanbanIssue>({
   })
 
   return (
-    <div className="flex h-full max-h-full min-h-0 w-72 shrink-0 flex-col rounded-lg border bg-muted/30">
+    <div
+      className={`flex h-full max-h-full min-h-0 w-72 shrink-0 flex-col rounded-lg border bg-muted/30 transition-[opacity,filter,background-color,border-color] duration-150 ${
+        activeDragIssue && dropDisabled
+          ? "opacity-45 saturate-[0.65] contrast-[0.92] border-muted-foreground/25 bg-muted/20"
+          : ""
+      }`}
+    >
       <div className="flex shrink-0 items-center gap-2 rounded-t-lg border-b bg-background px-2 py-2">
         {ColumnIcon ? (
           <ColumnIcon className="h-4 w-4 shrink-0 text-muted-foreground" />
@@ -508,7 +538,9 @@ function BoardColumn<TIssue extends KanbanIssue>({
       >
         <div
           ref={setDroppableRef}
-          className={`min-h-0 flex-1 space-y-2 overflow-y-auto p-2 ${isOver && !dropDisabled ? "rounded-md bg-muted/50" : ""} ${dropDisabled ? "opacity-40" : ""}`}
+          className={`min-h-0 flex-1 space-y-2 overflow-y-auto p-2 ${
+            isOver && !dropDisabled ? "rounded-md bg-muted/50" : ""
+          }`}
         >
           {issues.map((issue) => (
             <SortableBoardCard
