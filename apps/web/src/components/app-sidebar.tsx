@@ -28,6 +28,7 @@ function getNavItems(orgSlug: string) {
       title: "Projects",
       url: `/${orgSlug}/projects`,
       icon: <Boxes />,
+      hrefMatch: "exact" as const,
     },
   ]
 }

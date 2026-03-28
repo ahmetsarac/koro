@@ -1,5 +1,7 @@
 "use client"
 
+import { usePathname } from "next/navigation"
+
 import {
   Collapsible,
   CollapsibleContent,
@@ -17,6 +19,16 @@ import {
 } from "@/components/ui/sidebar"
 import { ChevronRightIcon } from "lucide-react"
 
+function routeMatches(
+  pathname: string,
+  url: string,
+  match: "prefix" | "exact" = "prefix"
+) {
+  const base = url.split("#")[0]
+  if (match === "exact") return pathname === base
+  return pathname === base || pathname.startsWith(`${base}/`)
+}
+
 export function NavMain({
   items,
 }: {
@@ -24,6 +36,8 @@ export function NavMain({
     title: string
     url: string
     icon?: React.ReactNode
+    /** `exact`: only `pathname === url`. Default `prefix`: url and subpaths. */
+    hrefMatch?: "prefix" | "exact"
     isActive?: boolean
     items?: {
       title: string
@@ -31,6 +45,8 @@ export function NavMain({
     }[]
   }[]
 }) {
+  const pathname = usePathname()
+
   return (
     <SidebarGroup className="shrink-0">
       <SidebarGroupLabel>Workspace</SidebarGroupLabel>
@@ -66,14 +82,24 @@ export function NavMain({
               </CollapsibleContent>
             </SidebarMenuItem>
           </Collapsible>
-        ) : (<SidebarMenuItem key={item.title}>
-          <SidebarMenuButton asChild tooltip={item.title}>
-            <a href={item.url}>
-              {item.icon}
-              <span>{item.title}</span>
-            </a>
-          </SidebarMenuButton>
-        </SidebarMenuItem>))}
+        ) : (
+          <SidebarMenuItem key={item.title}>
+            <SidebarMenuButton
+              asChild
+              tooltip={item.title}
+              isActive={routeMatches(
+                pathname,
+                item.url,
+                item.hrefMatch ?? "prefix"
+              )}
+            >
+              <a href={item.url}>
+                {item.icon}
+                <span>{item.title}</span>
+              </a>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        ))}
       </SidebarMenu>
     </SidebarGroup>
   )
