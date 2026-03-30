@@ -1,11 +1,16 @@
 # Yerel: postgres / minio / web çoğunlukla internal ağda (dış çıkış yok).
 #
 # sqlx önbelleği compose akışında üretilir (ayrı docker komutu gerekmez):
-#   postgres → migrate → sqlx-prepare (koro_local + koro_egress: cargo metadata / crates.io) → api-build → api (yalnız koro_local) → web
+#   postgres → migrate → sqlx-prepare (çift ağ: sadece bu adımda crates.io) → api-build (aynı) → api + web (yalnız koro_local)
 #
 # Tek komut: docker compose -f docker-compose.local.yml up --build -d
 #
 # Konteyner içi Postgres: TLS yok → sqlx için ?sslmode=disable (aksi halde prepare bağlantısı kırılabilir).
+#
+# İnternet kesisi:
+#   - Uzun ömürlü servisler (postgres, minio, api, web, migrate, …) yalnızca koro_local → dış ağa çıkamaz.
+#   - sqlx-prepare ve api-build konteynerleri koro_egress ile çalışır → yalnızca build/prepare sürerken crates.io.
+#   - docker compose build (imaj derleme) host/buildkit ağı kullanır; bu dosya runtime stack'ini tanımlar.
 
 networks:
   koro_local:
@@ -167,9 +172,8 @@ services:
       MINIO_ACCESS_KEY: minioadmin
       MINIO_SECRET_KEY: minioadmin
       MINIO_BUCKET: koro-attachments
-    # Tarayıcı / curl: http://127.0.0.1:3001 — host IPv4; localhost bazen IPv6 ile kırılabiliyor
     ports:
-      - "127.0.0.1:3001:3001"
+      - "3001:3001"
     depends_on:
       postgres:
         condition: service_healthy
@@ -195,9 +199,9 @@ services:
       PORT: "3000"
       API_URL: http://api:3001
       NEXT_PUBLIC_API_URL: http://localhost:3001
-    # Tarayıcı: http://127.0.0.1:3000 (veya localhost:3000 — portu unutma, 3000)
+    # Tarayıcı: http://localhost:3000
     ports:
-      - "127.0.0.1:3000:3000"
+      - "3000:3000"
     depends_on:
       - api
 
