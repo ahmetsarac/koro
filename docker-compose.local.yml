@@ -1,13 +1,17 @@
-# Yerel: internal: true (runtime'da dış internet yok).
+# Yerel: postgres / minio / web çoğunlukla internal ağda (dış çıkış yok).
 #
-# Docker Compose, up --build sırasında önce tüm imajları derler; apps/api/.sqlx içinde .json olmadan api build kırılır.
-# Windows: önce .\scripts\up-local.ps1 (postgresql + migrate + sqlx-prepare + build).
-# .sqlx/.gitkeep repoda tutulur; gerçek önbellek sqlx-prepare ile üretilir (commit önerilir).
+# sqlx önbelleği compose akışında üretilir (ayrı docker komutu gerekmez):
+#   postgres → migrate → sqlx-prepare → api-build (cargo build, crates.io için koro_egress) → api (yalnız koro_local) → web
+#
+# Tek komut: docker compose -f docker-compose.local.yml up --build -d
 
 networks:
   koro_local:
     driver: bridge
     internal: true
+  # Yalnızca api-build: cargo fetch için (runtime api bu ağa bağlı değil)
+  koro_egress:
+    driver: bridge
 
 services:
   postgres:
@@ -101,15 +105,37 @@ services:
     entrypoint: ["cargo", "sqlx", "prepare"]
     restart: "no"
 
+  api-build:
+    image: rust:1-bookworm
+    container_name: koro-api-build-local
+    pull_policy: missing
+    working_dir: /app
+    networks:
+      koro_local:
+      koro_egress:
+    volumes:
+      - ./apps/api:/app
+      - api_cargo_registry_local:/usr/local/cargo/registry
+      - api_cargo_git_local:/usr/local/cargo/git
+    environment:
+      SQLX_OFFLINE: "true"
+    depends_on:
+      sqlx-prepare:
+        condition: service_completed_successfully
+    command: ["cargo", "build", "--release"]
+    restart: "no"
+
   api:
-    image: koro-api:local
+    image: koro-api:local-runtime
     build:
       context: ./apps/api
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.local-runtime
     container_name: koro-api-local
     restart: unless-stopped
     networks:
       - koro_local
+    volumes:
+      - ./apps/api/target/release/api:/app/api:ro
     environment:
       DATABASE_URL: postgres://koro:koro@postgres:5432/koro
       JWT_SECRET: ${JWT_SECRET:-dev_secret}
@@ -123,7 +149,7 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      sqlx-prepare:
+      api-build:
         condition: service_completed_successfully
       minio-init:
         condition: service_completed_successfully
@@ -150,3 +176,5 @@ services:
 volumes:
   koro_pgdata_local:
   koro_minio_local:
+  api_cargo_registry_local:
+  api_cargo_git_local:
