@@ -9,14 +9,12 @@
 #
 # Host erişimi vs internet çıkışı (aynı şey değil):
 #   - 127.0.0.1:HOST:CONTAINER → portu yalnızca Docker host’ta loopback’e bağlar; LAN’dan gelen bağlantı alınmaz.
-#   - internal: true → o bridge üzerinden dış internet yok. postgres / minio / migrate hepsi yalnız burada.
-#   - Docker Desktop: Sadece internal ağda kalan konteynerde "ports:" çoğu sürümde host’a düzgün bağlanmaz.
-#       Bu yüzden api + web ek olarak koro_publish (normal bridge) kullanır — böylece 127.0.0.1:3000/3001 çalışır.
-#       Servisler arası trafik hâlâ koro_local üzerinden (aynı DNS isimleri iki ağda da çözülür).
-#   - koro_publish’a bağlı api/web için teorik outbound internet mümkün; DB/minio katmanı internal’da kalmaya devam eder.
-#   - “localhost’tan gir ama konteyner asla outbound göndermesin” garantisini Compose tek başına vermez;
-#     ek sıkılık için host firewall / kurumsal profil gerekir. sqlx-prepare ve api-build çalışırken crates.io
-#     kullanır (koro_egress).
+#   - internal: true → o bridge üzerinden dış internet yok (konteyner başına WAN çıkışı yok).
+#   - koro_local: postgres, minio, migrate, … + api/web’in DB/minio ile konuştuğu ağ.
+#   - koro_publish: yine internal: true — api/web için ikinci bridge; Docker bazı Desktop sürümlerinde tek
+#       internal ağ + ports kombinasyonundan daha stabil host→konteyner yayın verir. Dış hedeflere route yok;
+#       yine de host bu ağdaki konteynerlere published port ile ulaşabilir (Docker dokümantasyonu).
+#   - sqlx-prepare + api-build: yalnız çalışırken koro_egress → crates.io.
 #
 # İçeride dinleme: Next standalone HOSTNAME=0.0.0.0; API zaten 0.0.0.0 (Rust). Böylece host→container
 # trafiği port map ile içeri girer.
@@ -25,9 +23,10 @@ networks:
   koro_local:
     driver: bridge
     internal: true
-  # api + web: Docker Desktop’ta host portları için (internal değil). postgres/minio burada değil.
+  # api + web ikinci ayağı — dış internet yok; host port yayını için ayrı bridge (postgres/minio bu ağda değil).
   koro_publish:
     driver: bridge
+    internal: true
   # sqlx-prepare + api-build: cargo / crates.io (runtime api bu ağa bağlı değil)
   koro_egress:
     driver: bridge
