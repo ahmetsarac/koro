@@ -79,11 +79,17 @@ services:
     volumes:
       - ./apps/api:/app
     environment:
-      DATABASE_URL: postgres://koro:koro@postgres:5432/koro
+      DATABASE_URL: postgres://koro:koro@postgres:5432/koro?sslmode=disable
+      RUST_BACKTRACE: "1"
     depends_on:
       migrate:
         condition: service_completed_successfully
-    entrypoint: ["cargo", "sqlx", "prepare"]
+    entrypoint:
+      [
+        "/bin/sh",
+        "-c",
+        'set -eu; cd /app; if [ -f .env ]; then mv .env .env.koro_prepare_bak; trap "mv .env.koro_prepare_bak .env 2>/dev/null || true" EXIT; fi; echo "sqlx-prepare rustc:$$(rustc -V) cargo:$$(cargo -V)"; cargo sqlx prepare --database-url "$$DATABASE_URL" || { echo "sqlx prepare basarisiz; .sqlx:"; ls -la .sqlx 2>/dev/null || true; exit 1; }; echo "sqlx-prepare tamam; .sqlx:"; ls -la .sqlx',
+      ]
     restart: "no"
 
   api:
@@ -94,7 +100,7 @@ services:
     container_name: koro-api
     restart: unless-stopped
     environment:
-      DATABASE_URL: postgres://koro:koro@postgres:5432/koro
+      DATABASE_URL: postgres://koro:koro@postgres:5432/koro?sslmode=disable
       JWT_SECRET: ${JWT_SECRET:-dev_secret}
       PORT: "3001"
       MINIO_ENDPOINT: http://minio:9000

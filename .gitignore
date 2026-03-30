@@ -1,4 +1,5 @@
 .env
+.env.koro_prepare_bak
 .DS_Store
 .npm
 .*/
