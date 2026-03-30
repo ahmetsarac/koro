@@ -138,7 +138,13 @@ services:
     depends_on:
       sqlx-prepare:
         condition: service_completed_successfully
-    command: ["cargo", "build", "--release"]
+    # Docker bazen eksik dosya mount'unda host'ta target/release/api dizini yaratır; cargo ikili yazamaz (EISDIR).
+    command:
+      [
+        "/bin/sh",
+        "-c",
+        'set -eu; cd /app; if [ -d target/release/api ]; then rm -rf target/release/api; fi; exec cargo build --release',
+      ]
     restart: "no"
 
   api:
@@ -151,7 +157,8 @@ services:
     networks:
       - koro_local
     volumes:
-      - ./apps/api/target/release/api:/app/api:ro
+      # Tek dosya mount: kaynak yoksa Docker dizin yaratır ve build kırılır; tüm release/ kullan.
+      - ./apps/api/target/release:/release:ro
     environment:
       DATABASE_URL: postgres://koro:koro@postgres:5432/koro?sslmode=disable
       JWT_SECRET: ${JWT_SECRET:-dev_secret}
