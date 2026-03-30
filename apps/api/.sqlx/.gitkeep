@@ -1,0 +1,2 @@
+# sqlx offline önbelleği: docker compose migrate + sqlx-prepare (veya scripts/up-local.ps1) ile doldurulur.
+# İçerik commitlenebilir; şema/query degisince yeniden `sqlx-prepare` calistirin.

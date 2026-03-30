@@ -2,3 +2,6 @@
 .DS_Store
 .npm
 .*/
+# sqlx offline sözlüğü — Docker API imajı için repoda tutulur (.*/ bunu yok saymasın diye istisna)
+!apps/api/.sqlx/
+!apps/api/.sqlx/**
