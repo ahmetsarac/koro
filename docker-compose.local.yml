@@ -1,8 +1,10 @@
-# Veri gizliliği (runtime): internal: true — çalışan konteynerler dış internete çıkamaz; bu pull_policy ile değil, ağ ile sağlanır.
-# Kurulum / build: İnternet kullanılabilir — taban imajlar yerelde yoksa `pull_policy: missing` ile bir kez indirilir; api/web Dockerfile build'i registry + crates/npm kullanır.
-# Tamamen çevrimdışı kurulum: docker save/load ile taban imajları taşıyın; bu dosyada pull_policy'yi never yapın veya --pull never kullanın.
+# Yerel: internal: true (runtime'da dış internet yok).
 #
-# API build: önce postgres + migration, sonra build (ana dosyayla aynı sıra).
+# Docker Compose, up --build sırasında önce tüm imajları derler; .sqlx olmadan api build kırılır.
+# Tek komut (migrate → sqlx-prepare → build → ayağa kaldır):
+#   .\scripts\up-local.ps1   veya   ./scripts/up-local.sh
+#
+# Sadece docker compose kullanacaksanız önce .sqlx üretin veya yukarıdaki script'i kullanın.
 
 networks:
   koro_local:
@@ -30,6 +32,26 @@ services:
       interval: 5s
       timeout: 3s
       retries: 20
+
+  migrate:
+    image: postgres:16
+    container_name: koro-migrate-local
+    pull_policy: missing
+    networks:
+      - koro_local
+    volumes:
+      - ./db/migrations:/migrations:ro
+      - ./scripts/migrate-compose.sh:/migrate-compose.sh:ro
+    environment:
+      PGHOST: postgres
+      PGUSER: koro
+      PGPASSWORD: koro
+      PGDATABASE: koro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    entrypoint: ["/bin/bash", "/migrate-compose.sh"]
+    restart: "no"
 
   minio:
     image: minio/minio:latest
@@ -64,15 +86,28 @@ services:
       exit 0;
       "
 
+  sqlx-prepare:
+    build:
+      context: ./apps/api
+      dockerfile: Dockerfile.sqlx
+    pull_policy: missing
+    networks:
+      - koro_local
+    volumes:
+      - ./apps/api:/app
+    environment:
+      DATABASE_URL: postgres://koro:koro@postgres:5432/koro
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    entrypoint: ["cargo", "sqlx", "prepare"]
+    restart: "no"
+
   api:
     image: koro-api:local
     build:
       context: ./apps/api
       dockerfile: Dockerfile
-      args:
-        DATABASE_URL: postgres://koro:koro@host.docker.internal:5432/koro
-      extra_hosts:
-        - "host.docker.internal:host-gateway"
     container_name: koro-api-local
     restart: unless-stopped
     networks:
@@ -90,6 +125,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      sqlx-prepare:
+        condition: service_completed_successfully
       minio-init:
         condition: service_completed_successfully
 

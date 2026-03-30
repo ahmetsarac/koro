@@ -1,0 +1,4 @@
+# sqlx-cli araç imajı — host'a Rust/sqlx kurmadan: docker compose --profile tools run --rm sqlx-prepare
+FROM rust:1-bookworm
+RUN cargo install sqlx-cli --version 0.8.6 --no-default-features --features rustls,postgres --locked
+WORKDIR /app

@@ -1,14 +1,14 @@
-# Builder: internet + erişilebilir Postgres (migration'lı) gerekir — sqlx makroları şemayı doğrular.
-# Runtime: yalnızca statik binary — ağ dışına çıkmaz.
+# Builder: SQLX_OFFLINE — önce `docker compose --profile tools run --rm sqlx-prepare` ile .sqlx üretin.
+# Runtime: yalnızca binary.
 
 FROM rust:1-bookworm AS builder
 WORKDIR /app
 
-COPY Cargo.toml Cargo.lock ./
-COPY src ./src
+ENV SQLX_OFFLINE=true
 
-ARG DATABASE_URL
-ENV DATABASE_URL=${DATABASE_URL}
+COPY Cargo.toml Cargo.lock ./
+COPY .sqlx ./.sqlx
+COPY src ./src
 
 RUN cargo build --release
 

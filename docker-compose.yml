@@ -1,13 +1,8 @@
-# Varsayılan compose: çalışma zamanında konteynerler dış internete çıkabilir (normal bridge).
-# Sadece dış erişimi kapatmak için docker-compose.local.yml kullanın (internal: true).
+# Varsayılan compose: dış internet mümkün (normal bridge).
+# Local + internal ağ için: docker-compose.local.yml
 #
-# API imajı derlenirken sqlx Postgres'e bağlanır. Sıra:
-#   1. docker compose up -d postgres
-#   2. db/migrations dosyalarını sırayla uygulayın (host'tan 5432)
-#   3. docker compose build
-#   4. docker compose up -d
-#
-# DATABASE_URL build arg: Docker Desktop için host.docker.internal; saf Linux'ta ek genelde gerekmez.
+# API build (SQLX_OFFLINE) .sqlx ister. up --build tek başına .sqlx yoksa api build'i kırabilir.
+# Tek komut: ./scripts/up.sh veya PowerShell için aynı akışı docker-compose.local ile scripts/up-local.ps1 kullanın.
 
 services:
   postgres:
@@ -27,6 +22,23 @@ services:
       interval: 5s
       timeout: 3s
       retries: 20
+
+  migrate:
+    image: postgres:16
+    container_name: koro-migrate
+    volumes:
+      - ./db/migrations:/migrations:ro
+      - ./scripts/migrate-compose.sh:/migrate-compose.sh:ro
+    environment:
+      PGHOST: postgres
+      PGUSER: koro
+      PGPASSWORD: koro
+      PGDATABASE: koro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    entrypoint: ["/bin/bash", "/migrate-compose.sh"]
+    restart: "no"
 
   minio:
     image: minio/minio:latest
@@ -55,15 +67,25 @@ services:
       exit 0;
       "
 
+  sqlx-prepare:
+    build:
+      context: ./apps/api
+      dockerfile: Dockerfile.sqlx
+    volumes:
+      - ./apps/api:/app
+    environment:
+      DATABASE_URL: postgres://koro:koro@postgres:5432/koro
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    entrypoint: ["cargo", "sqlx", "prepare"]
+    restart: "no"
+
   api:
     image: koro-api:latest
     build:
       context: ./apps/api
       dockerfile: Dockerfile
-      args:
-        DATABASE_URL: postgres://koro:koro@host.docker.internal:5432/koro
-      extra_hosts:
-        - "host.docker.internal:host-gateway"
     container_name: koro-api
     restart: unless-stopped
     environment:
@@ -79,6 +101,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      sqlx-prepare:
+        condition: service_completed_successfully
       minio-init:
         condition: service_completed_successfully
 
