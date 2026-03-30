@@ -1,7 +1,7 @@
 # Yerel: postgres / minio / web çoğunlukla internal ağda (dış çıkış yok).
 #
 # sqlx önbelleği compose akışında üretilir (ayrı docker komutu gerekmez):
-#   postgres → migrate → sqlx-prepare → api-build (cargo build, crates.io için koro_egress) → api (yalnız koro_local) → web
+#   postgres → migrate → sqlx-prepare (koro_local + koro_egress: cargo metadata / crates.io) → api-build → api (yalnız koro_local) → web
 #
 # Tek komut: docker compose -f docker-compose.local.yml up --build -d
 #
@@ -11,7 +11,7 @@ networks:
   koro_local:
     driver: bridge
     internal: true
-  # Yalnızca api-build: cargo fetch için (runtime api bu ağa bağlı değil)
+  # sqlx-prepare + api-build: cargo / crates.io (runtime api bu ağa bağlı değil)
   koro_egress:
     driver: bridge
 
@@ -101,9 +101,12 @@ services:
       dockerfile: Dockerfile.sqlx
     pull_policy: missing
     networks:
-      - koro_local
+      koro_local:
+      koro_egress:
     volumes:
       - ./apps/api:/app
+      - api_cargo_registry_local:/usr/local/cargo/registry
+      - api_cargo_git_local:/usr/local/cargo/git
     environment:
       DATABASE_URL: postgres://koro:koro@postgres:5432/koro?sslmode=disable
       RUST_BACKTRACE: "1"
