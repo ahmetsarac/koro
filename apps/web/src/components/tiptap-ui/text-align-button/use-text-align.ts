@@ -1,6 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useState } from "react"
+import "@tiptap/extension-text-align"
 import type { ChainedCommands } from "@tiptap/react"
 import { type Editor } from "@tiptap/react"
 

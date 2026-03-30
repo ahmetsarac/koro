@@ -57,6 +57,29 @@ interface ListResponse {
   groups: WorkflowGroup[]
 }
 
+function computeWorkflowReorder(
+  prev: WorkflowGroup[],
+  activeId: string,
+  overId: string
+): {
+  next: WorkflowGroup[]
+  patch: { category: string; statuses: WorkflowStatusItem[] } | null
+} {
+  for (const g of prev) {
+    const oldIndex = g.statuses.findIndex((s) => s.id === activeId)
+    const newIndex = g.statuses.findIndex((s) => s.id === overId)
+    if (oldIndex === -1 || newIndex === -1) continue
+    const newStatuses = arrayMove(g.statuses, oldIndex, newIndex)
+    return {
+      next: prev.map((x) =>
+        x.category === g.category ? { ...x, statuses: newStatuses } : x
+      ),
+      patch: { category: g.category, statuses: newStatuses },
+    }
+  }
+  return { next: prev, patch: null }
+}
+
 function SortableStatusRow({
   status,
   disabled,
@@ -277,21 +300,16 @@ export default function WorkflowStatusesSettingsPage({
     const activeId = String(active.id)
     const overId = String(over.id)
 
-    let patch: { category: string; statuses: WorkflowStatusItem[] } | null = null
+    const persistRef: {
+      current: { category: string; statuses: WorkflowStatusItem[] } | null
+    } = { current: null }
     setGroups((prev) => {
-      for (const g of prev) {
-        const oldIndex = g.statuses.findIndex((s) => s.id === activeId)
-        const newIndex = g.statuses.findIndex((s) => s.id === overId)
-        if (oldIndex === -1 || newIndex === -1) continue
-        const newStatuses = arrayMove(g.statuses, oldIndex, newIndex)
-        patch = { category: g.category, statuses: newStatuses }
-        return prev.map((x) =>
-          x.category === g.category ? { ...x, statuses: newStatuses } : x
-        )
-      }
-      return prev
+      const { next, patch } = computeWorkflowReorder(prev, activeId, overId)
+      persistRef.current = patch
+      return next
     })
 
+    const patch = persistRef.current
     if (patch) {
       void persistCategoryOrder(patch.category, patch.statuses)
     }

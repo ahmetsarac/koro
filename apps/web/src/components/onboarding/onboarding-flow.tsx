@@ -52,7 +52,7 @@ export function OnboardingFlow() {
       if (!res.ok) {
         throw new Error(data.message ?? "Organizasyon oluşturulamadı")
       }
-      const slug = data.slug ?? orgSlugInput.trim() || slugFromName(orgName)
+      const slug = data.slug ?? (orgSlugInput.trim() || slugFromName(orgName))
       router.replace(`/${slug}/projects`)
       router.refresh()
     } catch (err) {

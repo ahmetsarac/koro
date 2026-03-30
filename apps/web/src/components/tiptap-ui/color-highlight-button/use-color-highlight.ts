@@ -1,6 +1,7 @@
 "use client"
 
 import { useCallback, useEffect, useState } from "react"
+import "@tiptap/extension-highlight"
 import { type Editor } from "@tiptap/react"
 import { useHotkeys } from "react-hotkeys-hook"
 
