@@ -167,8 +167,9 @@ services:
       MINIO_ACCESS_KEY: minioadmin
       MINIO_SECRET_KEY: minioadmin
       MINIO_BUCKET: koro-attachments
+    # Tarayıcı / curl: http://127.0.0.1:3001 — host IPv4; localhost bazen IPv6 ile kırılabiliyor
     ports:
-      - "3001:3001"
+      - "127.0.0.1:3001:3001"
     depends_on:
       postgres:
         condition: service_healthy
@@ -191,10 +192,12 @@ services:
     environment:
       # Docker HOSTNAME'i konteyner id yapar; Next standalone server.js buna göre dinler — host:3000 kırılır.
       HOSTNAME: "0.0.0.0"
+      PORT: "3000"
       API_URL: http://api:3001
       NEXT_PUBLIC_API_URL: http://localhost:3001
+    # Tarayıcı: http://127.0.0.1:3000 (veya localhost:3000 — portu unutma, 3000)
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
     depends_on:
       - api
 
