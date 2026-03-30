@@ -7,13 +7,16 @@
 #
 # Konteyner içi Postgres: TLS yok → sqlx için ?sslmode=disable (aksi halde prepare bağlantısı kırılabilir).
 #
-# Host erişimi vs internet çıkışı (aynı şey değil):
-#   - 127.0.0.1:HOST:CONTAINER → portu yalnızca Docker host’ta loopback’e bağlar; LAN’dan gelen bağlantı alınmaz.
-#   - internal: true → o bridge üzerinden dış internet yok (konteyner başına WAN çıkışı yok).
-#   - koro_local: postgres, minio, migrate, … + api/web’in DB/minio ile konuştuğu ağ.
-#   - koro_publish: yine internal: true — api/web için ikinci bridge; Docker bazı Desktop sürümlerinde tek
-#       internal ağ + ports kombinasyonundan daha stabil host→konteyner yayın verir. Dış hedeflere route yok;
-#       yine de host bu ağdaki konteynerlere published port ile ulaşabilir (Docker dokümantasyonu).
+# Host erişimi vs konteynerin “internete çıkması” (aynı şey değil):
+#   - 127.0.0.1:HOST:CONTAINER (veya Desktop’ta “port binding → localhost only”) → YALNIZCA bu makineden
+#       yayınlanan porta bağlanılır; aynı Wi‑Fi’deki başka PC’ler erişemez. Bu GİRİŞ tarafını sıkılaştırır;
+#       konteynerin içeriden curl ile dış siteye gitmesini BLOKE ETMEZ.
+#   - internal: true → bridge üzerinden dış WAN’a route yok; konteyner çıkışı engellenir. Desktop’ta api+web
+#       için published port + tamamen internal bazen tarayıcıdan erişimi kırar; o yüzden koro_publish
+#       normal bridge (internal değil) — api/web için teorik outbound mümkün. postgres/minio yalnız
+#       koro_local (internal) → onlar WAN’a çıkamaz.
+#   - api + web WAN çıkışı: scripts/container-block-wan-egress.sh (iptables) + cap_add NET_ADMIN.
+#       Host→127.0.0.1:3000/3001 docker-proxy ile kalır; konteyner içi outbound public IP REJECT.
 #   - sqlx-prepare + api-build: yalnız çalışırken koro_egress → crates.io.
 #
 # İçeride dinleme: Next standalone HOSTNAME=0.0.0.0; API zaten 0.0.0.0 (Rust). Böylece host→container
@@ -23,10 +26,10 @@ networks:
   koro_local:
     driver: bridge
     internal: true
-  # api + web ikinci ayağı — dış internet yok; host port yayını için ayrı bridge (postgres/minio bu ağda değil).
+  # api + web: host portları (Docker Desktop). internal değil — aksi halde tarayıcıdan erişim sık kırılır.
+  # Giriş sıkılığı: alttaki ports satırları 127.0.0.1 ile (Desktop “localhost only” ile aynı fikir).
   koro_publish:
     driver: bridge
-    internal: true
   # sqlx-prepare + api-build: cargo / crates.io (runtime api bu ağa bağlı değil)
   koro_egress:
     driver: bridge
@@ -170,12 +173,18 @@ services:
       dockerfile: Dockerfile.local-runtime
     container_name: koro-api-local
     restart: unless-stopped
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
     networks:
       koro_local:
       koro_publish:
     volumes:
+      - ./scripts/container-block-wan-egress.sh:/usr/local/bin/container-block-wan-egress.sh:ro
       # Tek dosya mount: kaynak yoksa Docker dizin yaratır ve build kırılır; tüm release/ kullan.
       - ./apps/api/target/release:/release:ro
+    entrypoint: ["/usr/local/bin/container-block-wan-egress.sh"]
+    command: ["/release/api"]
     environment:
       DATABASE_URL: postgres://koro:koro@postgres:5432/koro?sslmode=disable
       JWT_SECRET: ${JWT_SECRET:-dev_secret}
@@ -203,9 +212,16 @@ services:
         NEXT_PUBLIC_API_URL: http://localhost:3001
     container_name: koro-web-local
     restart: unless-stopped
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
     networks:
       koro_local:
       koro_publish:
+    volumes:
+      - ./scripts/container-block-wan-egress.sh:/usr/local/bin/container-block-wan-egress.sh:ro
+    entrypoint: ["/usr/local/bin/container-block-wan-egress.sh"]
+    command: ["node", "server.js"]
     environment:
       # api ile aynı olmalı (proxy JWT doğrulaması). Proje kökünde .env ile ${JWT_SECRET} verilebilir.
       JWT_SECRET: ${JWT_SECRET:-dev_secret}

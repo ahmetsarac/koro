@@ -1,7 +1,7 @@
 # docker-compose.local.yml içindeki `api` servisi: derlenmiş binary bind-mount ile çalışır.
 FROM debian:bookworm-slim
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends libssl3 ca-certificates \
+    && apt-get install -y --no-install-recommends libssl3 ca-certificates iptables \
     && rm -rf /var/lib/apt/lists/*
 # Host: apps/api/target/release → /release (tek dosya mount dizin yaratıp cargo’yu bozmasın diye)
 ENTRYPOINT ["/release/api"]
