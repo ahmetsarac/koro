@@ -1,10 +1,8 @@
 # Yerel: internal: true (runtime'da dış internet yok).
 #
-# Docker Compose, up --build sırasında önce tüm imajları derler; .sqlx olmadan api build kırılır.
-# Tek komut (migrate → sqlx-prepare → build → ayağa kaldır):
-#   .\scripts\up-local.ps1   veya   ./scripts/up-local.sh
-#
-# Sadece docker compose kullanacaksanız önce .sqlx üretin veya yukarıdaki script'i kullanın.
+# Docker Compose, up --build sırasında önce tüm imajları derler; apps/api/.sqlx içinde .json olmadan api build kırılır.
+# Windows: önce .\scripts\up-local.ps1 (postgresql + migrate + sqlx-prepare + build).
+# .sqlx/.gitkeep repoda tutulur; gerçek önbellek sqlx-prepare ile üretilir (commit önerilir).
 
 networks:
   koro_local:
