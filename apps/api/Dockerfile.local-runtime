@@ -1,5 +1,6 @@
 # docker-compose.local.yml içindeki `api` servisi: derlenmiş binary bind-mount ile çalışır.
 FROM debian:bookworm-slim
+ENV PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 RUN apt-get update \
     && apt-get install -y --no-install-recommends libssl3 ca-certificates iptables \
     && rm -rf /var/lib/apt/lists/*

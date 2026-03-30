@@ -3,12 +3,19 @@
 # Gerekli: imajda iptables + compose'ta cap_add: NET_ADMIN
 set -eu
 
-if ! command -v iptables >/dev/null 2>&1; then
-  echo "container-block-wan-egress: iptables bulunamadi (imajda iptables paketi olmali)" >&2
+# node:*-slim imaji PATH'te /usr/sbin yok; iptables paketi binary'yi /usr/sbin/iptables'a koyar.
+IPT=""
+for candidate in /usr/sbin/iptables /sbin/iptables; do
+  if [ -x "$candidate" ]; then
+    IPT=$candidate
+    break
+  fi
+done
+
+if [ -z "$IPT" ]; then
+  echo "container-block-wan-egress: iptables bulunamadi (imaj: apt install iptables; ardindan docker compose build --no-cache web api)" >&2
   exit 1
 fi
-
-IPT=iptables
 
 if "$IPT" -N KORO_EGRESS 2>/dev/null; then
   :
@@ -33,8 +40,15 @@ if ! "$IPT" -C OUTPUT -j KORO_EGRESS 2>/dev/null; then
   "$IPT" -I OUTPUT 1 -j KORO_EGRESS
 fi
 
-if command -v ip6tables >/dev/null 2>&1; then
-  ip6tables -P OUTPUT DROP 2>/dev/null || true
+IP6T=""
+for candidate in /usr/sbin/ip6tables /sbin/ip6tables; do
+  if [ -x "$candidate" ]; then
+    IP6T=$candidate
+    break
+  fi
+done
+if [ -n "$IP6T" ]; then
+  "$IP6T" -P OUTPUT DROP 2>/dev/null || true
 fi
 
 exec "$@"
