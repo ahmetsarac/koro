@@ -1,16 +1,24 @@
-# Yerel: postgres / minio / web çoğunlukla internal ağda (dış çıkış yok).
+# Yerel stack: uygulama içi “private” ağ (internal) + tarayıcıdan sadece bu makineye port.
 #
 # sqlx önbelleği compose akışında üretilir (ayrı docker komutu gerekmez):
-#   postgres → migrate → sqlx-prepare (çift ağ: sadece bu adımda crates.io) → api-build (aynı) → api + web (yalnız koro_local)
+#   postgres → migrate → sqlx-prepare → api-build → api + web
 #
 # Tek komut: docker compose -f docker-compose.local.yml up --build -d
 #
 # Konteyner içi Postgres: TLS yok → sqlx için ?sslmode=disable (aksi halde prepare bağlantısı kırılabilir).
 #
-# İnternet kesisi:
-#   - Uzun ömürlü servisler (postgres, minio, api, web, migrate, …) yalnızca koro_local → dış ağa çıkamaz.
-#   - sqlx-prepare ve api-build konteynerleri koro_egress ile çalışır → yalnızca build/prepare sürerken crates.io.
-#   - docker compose build (imaj derleme) host/buildkit ağı kullanır; bu dosya runtime stack'ini tanımlar.
+# Host erişimi vs internet çıkışı (aynı şey değil):
+#   - 127.0.0.1:HOST:CONTAINER → portu yalnızca Docker host’ta loopback’e bağlar; LAN’dan gelen bağlantı alınmaz.
+#   - internal: true → bridge’i dış dünyaya izole eder; runtime servisleri (postgres, minio, api, web, …)
+#       bu ağda tek başına internete çıkamaz (build job’lar ayrı, aşağıda).
+#   - Web’in http://api:3001 ile SSR’da API’ye gitmesi için web de aynı internal ağda olmalı (ayrı “public”
+#       bridge’e sadece web koymak api hostname’ini kırar).
+#   - “localhost’tan gir ama konteyner asla outbound göndermesin” garantisini Compose tek başına vermez;
+#     ek sıkılık için host firewall / kurumsal profil gerekir. sqlx-prepare ve api-build çalışırken crates.io
+#     kullanır (koro_egress).
+#
+# İçeride dinleme: Next standalone HOSTNAME=0.0.0.0; API zaten 0.0.0.0 (Rust). Böylece host→container
+# trafiği port map ile içeri girer.
 
 networks:
   koro_local:
@@ -33,7 +41,7 @@ services:
       POSTGRES_PASSWORD: koro
       POSTGRES_DB: koro
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - koro_pgdata_local:/var/lib/postgresql/data
     healthcheck:
@@ -78,8 +86,8 @@ services:
       MINIO_ROOT_USER: minioadmin
       MINIO_ROOT_PASSWORD: minioadmin
     ports:
-      - "9000:9000"
-      - "9001:9001"
+      - "127.0.0.1:9000:9000"
+      - "127.0.0.1:9001:9001"
     volumes:
       - koro_minio_local:/data
     command: server /data --console-address ":9001"
@@ -173,7 +181,7 @@ services:
       MINIO_SECRET_KEY: minioadmin
       MINIO_BUCKET: koro-attachments
     ports:
-      - "3001:3001"
+      - "127.0.0.1:3001:3001"
     depends_on:
       postgres:
         condition: service_healthy
@@ -199,9 +207,9 @@ services:
       PORT: "3000"
       API_URL: http://api:3001
       NEXT_PUBLIC_API_URL: http://localhost:3001
-    # Tarayıcı: http://localhost:3000
+    # Tarayıcı: http://127.0.0.1:3000 veya http://localhost:3000
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
     depends_on:
       - api
 
