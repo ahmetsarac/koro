@@ -128,6 +128,7 @@ services:
     restart: unless-stopped
     environment:
       HOSTNAME: "0.0.0.0"
+      JWT_SECRET: ${JWT_SECRET:-dev_secret}
       API_URL: http://api:3001
       NEXT_PUBLIC_API_URL: http://localhost:3001
     ports:
