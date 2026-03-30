@@ -127,6 +127,7 @@ services:
     container_name: koro-web
     restart: unless-stopped
     environment:
+      HOSTNAME: "0.0.0.0"
       API_URL: http://api:3001
       NEXT_PUBLIC_API_URL: http://localhost:3001
     ports:

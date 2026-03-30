@@ -189,6 +189,8 @@ services:
     networks:
       - koro_local
     environment:
+      # Docker HOSTNAME'i konteyner id yapar; Next standalone server.js buna göre dinler — host:3000 kırılır.
+      HOSTNAME: "0.0.0.0"
       API_URL: http://api:3001
       NEXT_PUBLIC_API_URL: http://localhost:3001
     ports:
