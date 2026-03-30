@@ -9,10 +9,11 @@
 #
 # Host erişimi vs internet çıkışı (aynı şey değil):
 #   - 127.0.0.1:HOST:CONTAINER → portu yalnızca Docker host’ta loopback’e bağlar; LAN’dan gelen bağlantı alınmaz.
-#   - internal: true → bridge’i dış dünyaya izole eder; runtime servisleri (postgres, minio, api, web, …)
-#       bu ağda tek başına internete çıkamaz (build job’lar ayrı, aşağıda).
-#   - Web’in http://api:3001 ile SSR’da API’ye gitmesi için web de aynı internal ağda olmalı (ayrı “public”
-#       bridge’e sadece web koymak api hostname’ini kırar).
+#   - internal: true → o bridge üzerinden dış internet yok. postgres / minio / migrate hepsi yalnız burada.
+#   - Docker Desktop: Sadece internal ağda kalan konteynerde "ports:" çoğu sürümde host’a düzgün bağlanmaz.
+#       Bu yüzden api + web ek olarak koro_publish (normal bridge) kullanır — böylece 127.0.0.1:3000/3001 çalışır.
+#       Servisler arası trafik hâlâ koro_local üzerinden (aynı DNS isimleri iki ağda da çözülür).
+#   - koro_publish’a bağlı api/web için teorik outbound internet mümkün; DB/minio katmanı internal’da kalmaya devam eder.
 #   - “localhost’tan gir ama konteyner asla outbound göndermesin” garantisini Compose tek başına vermez;
 #     ek sıkılık için host firewall / kurumsal profil gerekir. sqlx-prepare ve api-build çalışırken crates.io
 #     kullanır (koro_egress).
@@ -24,6 +25,9 @@ networks:
   koro_local:
     driver: bridge
     internal: true
+  # api + web: Docker Desktop’ta host portları için (internal değil). postgres/minio burada değil.
+  koro_publish:
+    driver: bridge
   # sqlx-prepare + api-build: cargo / crates.io (runtime api bu ağa bağlı değil)
   koro_egress:
     driver: bridge
@@ -168,7 +172,8 @@ services:
     container_name: koro-api-local
     restart: unless-stopped
     networks:
-      - koro_local
+      koro_local:
+      koro_publish:
     volumes:
       # Tek dosya mount: kaynak yoksa Docker dizin yaratır ve build kırılır; tüm release/ kullan.
       - ./apps/api/target/release:/release:ro
@@ -200,7 +205,8 @@ services:
     container_name: koro-web-local
     restart: unless-stopped
     networks:
-      - koro_local
+      koro_local:
+      koro_publish:
     environment:
       # Docker HOSTNAME'i konteyner id yapar; Next standalone server.js buna göre dinler — host:3000 kırılır.
       HOSTNAME: "0.0.0.0"
