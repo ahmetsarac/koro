@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Docker migrate servisi tarafından kullanılır (postgres:16 imajında bash mevcut).
+# Docker migrate servisi (postgres:16). Windows CRLF için compose entrypoint sed ile temizler.
 set -euo pipefail
 
 : "${PGHOST:=postgres}"
@@ -19,10 +19,7 @@ CREATE TABLE IF NOT EXISTS _koro_applied_migrations (
 );
 EOSQL
 
-shopt -s nullglob
-mapfile -t files < <(printf '%s\n' /migrations/*.sql | sort -V)
-shopt -u nullglob
-
+mapfile -t files < <(find /migrations -maxdepth 1 -type f -name '*.sql' | LC_ALL=C sort -V)
 if [[ ${#files[@]} -eq 0 ]]; then
   echo "migrate-compose: /migrations altında .sql yok" >&2
   exit 1

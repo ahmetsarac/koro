@@ -52,7 +52,12 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-    entrypoint: ["/bin/bash", "/migrate-compose.sh"]
+    entrypoint:
+      [
+        "/bin/bash",
+        "-c",
+        "set -euo pipefail; sed 's/\\r$$//' /migrate-compose.sh | bash -s",
+      ]
     restart: "no"
 
   minio:
