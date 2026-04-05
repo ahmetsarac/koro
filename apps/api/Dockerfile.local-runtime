@@ -1,8 +1,15 @@
-# docker-compose.local.yml içindeki `api` servisi: derlenmiş binary bind-mount ile çalışır.
+# docker-compose.local.yml — build context: repo kökü (.)
 FROM debian:bookworm-slim
+
 ENV PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+COPY scripts/container-block-wan-egress.sh /usr/local/bin/container-block-wan-egress.sh
+RUN chmod +x /usr/local/bin/container-block-wan-egress.sh
+
 RUN apt-get update \
     && apt-get install -y --no-install-recommends libssl3 ca-certificates iptables \
-    && rm -rf /var/lib/apt/lists/*
-# Host: apps/api/target/release → /release (tek dosya mount dizin yaratıp cargo’yu bozmasın diye)
+    && rm -rf /var/lib/apt/lists/* \
+    && test -x /usr/sbin/iptables
+
+# Host bind-mount: apps/api/target/release → /release
 ENTRYPOINT ["/release/api"]

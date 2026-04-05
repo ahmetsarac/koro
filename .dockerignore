@@ -1,0 +1,6 @@
+# Repo kökünden yapılan local build’ler (Dockerfile.local*) için bağlamı küçült
+.git
+apps/api/target
+apps/web/.next
+apps/web/node_modules
+**/node_modules
