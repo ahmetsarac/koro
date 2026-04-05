@@ -95,6 +95,7 @@ pub struct ListMyIssuesQuery {
     pub offset: Option<i64>,
     pub cursor: Option<String>,
     pub q: Option<String>,
+    /// Comma-separated workflow status UUIDs and/or status slugs (slug matches per issue row).
     pub status: Option<String>,
     pub priority: Option<String>,
     pub sort_by: Option<MyIssueSortBy>,
@@ -176,6 +177,7 @@ pub struct MyIssueItem {
 
 #[derive(Debug, Serialize, ToSchema)]
 pub struct StatusFacetEntry {
+    /// When the same `slug` exists in multiple projects, facets are merged; this id is one representative row.
     pub workflow_status_id: Uuid,
     pub project_id: Uuid,
     pub name: String,

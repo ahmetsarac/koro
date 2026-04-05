@@ -41,7 +41,7 @@ export function DataTableToolbar<TData>({
   const statusFilterOptions = React.useMemo(() => {
     if (!facets?.status?.length) return []
     return facets.status.map((s) => ({
-      value: s.workflow_status_id,
+      value: s.slug,
       label: s.name,
       icon: iconForIssueCategory(s.category),
     }))
@@ -49,9 +49,7 @@ export function DataTableToolbar<TData>({
 
   const statusFacetCounts = React.useMemo(() => {
     if (!facets?.status?.length) return undefined
-    return Object.fromEntries(
-      facets.status.map((s) => [s.workflow_status_id, s.count])
-    )
+    return Object.fromEntries(facets.status.map((s) => [s.slug, s.count]))
   }, [facets])
 
   const relationsFilterOptions = React.useMemo(

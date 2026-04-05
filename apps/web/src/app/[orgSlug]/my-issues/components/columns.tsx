@@ -391,7 +391,7 @@ export const createColumns = (orgSlug: string): ColumnDef<Issue>[] => [
     filterFn: (row, _id, value) => {
       const v = value as string[] | undefined
       if (!v?.length) return true
-      return v.includes(row.original.workflow_status_id)
+      return v.includes(row.original.status)
     },
   },
   {

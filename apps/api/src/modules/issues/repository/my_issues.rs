@@ -1,3 +1,4 @@
+use std::cmp::Ordering;
 use std::collections::HashMap;
 
 use sqlx::{FromRow, PgPool, Postgres, QueryBuilder};
@@ -86,6 +87,68 @@ struct StatusCountRow {
     count: i64,
 }
 
+fn workflow_category_order(category: &str) -> i32 {
+    match category {
+        "backlog" => 0,
+        "unstarted" => 1,
+        "started" => 2,
+        "completed" => 3,
+        "canceled" => 4,
+        _ => 5,
+    }
+}
+
+fn cmp_workflow_status_facet(a: &WorkflowStatusFacetRow, b: &WorkflowStatusFacetRow) -> Ordering {
+    workflow_category_order(&a.category)
+        .cmp(&workflow_category_order(&b.category))
+        .then_with(|| a.position.cmp(&b.position))
+        .then_with(|| a.slug.cmp(&b.slug))
+        .then_with(|| a.name.cmp(&b.name))
+}
+
+fn merge_status_facets_by_slug(
+    status_rows: Vec<WorkflowStatusFacetRow>,
+    count_map: &HashMap<uuid::Uuid, i64>,
+) -> Vec<StatusFacetEntry> {
+    let mut by_slug: HashMap<String, Vec<WorkflowStatusFacetRow>> = HashMap::new();
+    for r in status_rows {
+        by_slug.entry(r.slug.clone()).or_default().push(r);
+    }
+
+    let mut merged: Vec<StatusFacetEntry> = by_slug
+        .into_values()
+        .filter_map(|mut group| {
+            if group.is_empty() {
+                return None;
+            }
+            group.sort_by(cmp_workflow_status_facet);
+            let rep = &group[0];
+            let count: i64 = group
+                .iter()
+                .map(|r| *count_map.get(&r.workflow_status_id).unwrap_or(&0))
+                .sum();
+            Some(StatusFacetEntry {
+                workflow_status_id: rep.workflow_status_id,
+                project_id: rep.project_id,
+                name: rep.name.clone(),
+                slug: rep.slug.clone(),
+                category: rep.category.clone(),
+                position: rep.position,
+                count,
+            })
+        })
+        .collect();
+
+    merged.sort_by(|a, b| {
+        workflow_category_order(&a.category)
+            .cmp(&workflow_category_order(&b.category))
+            .then_with(|| a.position.cmp(&b.position))
+            .then_with(|| a.slug.cmp(&b.slug))
+            .then_with(|| a.name.cmp(&b.name))
+    });
+    merged
+}
+
 fn apply_my_issues_filters(
     builder: &mut QueryBuilder<Postgres>,
     query: &ListMyIssuesQuery,
@@ -93,21 +156,60 @@ fn apply_my_issues_filters(
 ) {
     if exclude_facet != Some("status") {
         if let Some(s) = query.status.as_deref() {
-            let values: Vec<uuid::Uuid> = s
-                .split(',')
-                .map(str::trim)
-                .filter(|x| !x.is_empty())
-                .filter_map(|x| x.parse().ok())
-                .collect();
-            if !values.is_empty() {
-                builder.push(" AND i.workflow_status_id IN (");
-                for (i, v) in values.iter().enumerate() {
-                    if i > 0 {
-                        builder.push(", ");
-                    }
-                    builder.push_bind(*v);
+            let tokens: Vec<&str> = s.split(',').map(str::trim).filter(|x| !x.is_empty()).collect();
+            let mut uuids: Vec<uuid::Uuid> = Vec::new();
+            let mut slugs: Vec<String> = Vec::new();
+            for t in tokens {
+                if let Ok(u) = t.parse::<uuid::Uuid>() {
+                    uuids.push(u);
+                } else {
+                    slugs.push(t.to_string());
                 }
-                builder.push(")");
+            }
+
+            match (uuids.is_empty(), slugs.is_empty()) {
+                (false, false) => {
+                    builder.push(" AND (i.workflow_status_id IN (");
+                    for (i, v) in uuids.iter().enumerate() {
+                        if i > 0 {
+                            builder.push(", ");
+                        }
+                        builder.push_bind(*v);
+                    }
+                    builder.push(
+                        ") OR EXISTS (SELECT 1 FROM project_workflow_statuses pws WHERE pws.id = i.workflow_status_id AND pws.slug IN (",
+                    );
+                    for (i, slug) in slugs.iter().enumerate() {
+                        if i > 0 {
+                            builder.push(", ");
+                        }
+                        builder.push_bind(slug.clone());
+                    }
+                    builder.push(")))");
+                }
+                (false, true) => {
+                    builder.push(" AND i.workflow_status_id IN (");
+                    for (i, v) in uuids.iter().enumerate() {
+                        if i > 0 {
+                            builder.push(", ");
+                        }
+                        builder.push_bind(*v);
+                    }
+                    builder.push(")");
+                }
+                (true, false) => {
+                    builder.push(
+                        " AND EXISTS (SELECT 1 FROM project_workflow_statuses pws WHERE pws.id = i.workflow_status_id AND pws.slug IN (",
+                    );
+                    for (i, slug) in slugs.iter().enumerate() {
+                        if i > 0 {
+                            builder.push(", ");
+                        }
+                        builder.push_bind(slug.clone());
+                    }
+                    builder.push("))");
+                }
+                (true, true) => {}
             }
         }
     }
@@ -354,18 +456,7 @@ pub async fn fetch_facets(
             .map(|r| (r.workflow_status_id, r.count))
             .collect();
 
-        facets.status = status_rows
-            .into_iter()
-            .map(|r| StatusFacetEntry {
-                workflow_status_id: r.workflow_status_id,
-                project_id: r.project_id,
-                name: r.name,
-                slug: r.slug,
-                category: r.category,
-                position: r.position,
-                count: *count_map.get(&r.workflow_status_id).unwrap_or(&0),
-            })
-            .collect();
+        facets.status = merge_status_facets_by_slug(status_rows, &count_map);
     }
 
     let mut priority_builder = QueryBuilder::<Postgres>::new(
