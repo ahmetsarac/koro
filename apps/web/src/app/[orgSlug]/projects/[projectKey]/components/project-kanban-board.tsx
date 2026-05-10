@@ -117,6 +117,44 @@ export function ProjectKanbanBoard({
     fetchBoard()
   }, [fetchBoard])
 
+  // Insert newly created issue into the correct board column
+  React.useEffect(() => {
+    const handler = (event: Event) => {
+      const created = (event as CustomEvent).detail as {
+        id: string
+        display_key: string
+        title: string
+        status: string
+        workflow_status_id: string
+        status_name: string
+        status_category: string
+        is_blocked: boolean
+        project_key: string
+      }
+      if (!created.display_key.startsWith(`${projectKey}-`)) return
+      setItemsByColumn((prev) => {
+        const colId = created.workflow_status_id
+        const next = { ...prev }
+        next[colId] = [
+          {
+            issue_id: created.id,
+            display_key: created.display_key,
+            title: created.title,
+            status: created.status,
+            workflow_status_id: created.workflow_status_id,
+            status_name: created.status_name,
+            status_category: created.status_category,
+            is_blocked: created.is_blocked,
+          },
+          ...(next[colId] || []),
+        ]
+        return next
+      })
+    }
+    window.addEventListener("koro:issue-created", handler)
+    return () => window.removeEventListener("koro:issue-created", handler)
+  }, [projectKey])
+
   const handleIssueMove = React.useCallback(
     async ({
       issueId,

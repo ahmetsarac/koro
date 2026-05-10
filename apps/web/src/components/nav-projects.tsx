@@ -35,6 +35,27 @@ export function NavProjects({
 }) {
   const router = useRouter()
   const [createProjectOpen, setCreateProjectOpen] = React.useState(false)
+  const [localProjects, setLocalProjects] = React.useState(projects)
+
+  React.useEffect(() => {
+    setLocalProjects(projects)
+  }, [projects])
+
+  React.useEffect(() => {
+    const handler = (event: Event) => {
+      const created = (event as CustomEvent).detail as { project_key?: string }
+      if (!created.project_key) return
+      setLocalProjects((prev) =>
+        prev.map((p) =>
+          p.key === created.project_key
+            ? { ...p, openIssueCount: p.openIssueCount + 1 }
+            : p
+        )
+      )
+    }
+    window.addEventListener("koro:issue-created", handler)
+    return () => window.removeEventListener("koro:issue-created", handler)
+  }, [])
 
   return (
     <>
@@ -47,17 +68,17 @@ export function NavProjects({
       <SidebarGroup
         className={cn(
           "group-data-[collapsible=icon]:hidden",
-          projects.length > 0 && "flex min-h-0 flex-1 flex-col"
+          localProjects.length > 0 && "flex min-h-0 flex-1 flex-col"
         )}
       >
         <div
           className={cn(
             "flex items-center",
-            projects.length > 0 && "shrink-0"
+            localProjects.length > 0 && "shrink-0"
           )}
         >
           <SidebarGroupLabel className="flex-1">Projects</SidebarGroupLabel>
-          {projects.length > 0 && (
+          {localProjects.length > 0 && (
             <SidebarGroupAction
               aria-label="Create project"
               title="Create project"
@@ -69,10 +90,10 @@ export function NavProjects({
             </SidebarGroupAction>
           )}
         </div>
-        {projects.length === 0 ? (
+        {localProjects.length === 0 ? (
           <NavProjectsEmpty onCreateProject={() => setCreateProjectOpen(true)} />
         ) : (
-          <NavProjectsList projects={projects} />
+          <NavProjectsList projects={localProjects} />
         )}
       </SidebarGroup>
     </>

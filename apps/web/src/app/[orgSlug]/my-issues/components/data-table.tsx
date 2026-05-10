@@ -70,12 +70,6 @@ function clearScrollState(filterType: IssueFilterType): void {
   myIssuesCache.delete(filterType)
 }
 
-function loadViewPreference(): "list" | "board" {
-  if (typeof window === "undefined") return "list"
-  const saved = window.localStorage.getItem(MY_ISSUES_VIEW_STORAGE_KEY)
-  return saved === "board" ? "board" : "list"
-}
-
 function saveViewPreference(view: "list" | "board"): void {
   if (typeof window === "undefined") return
   window.localStorage.setItem(MY_ISSUES_VIEW_STORAGE_KEY, view)
@@ -297,6 +291,65 @@ export function DataTable({ orgSlug, columns, filterType }: DataTableProps) {
   const scrollContainerRef = React.useRef<HTMLDivElement>(null)
   const hasRestoredFromCacheRef = React.useRef(false)
   const pendingScrollTopRef = React.useRef<number | null>(null)
+
+  // Insert newly created issue into current view without refetching
+  React.useEffect(() => {
+    const handler = (event: Event) => {
+      const created = (event as CustomEvent).detail as Issue & {
+        is_assigned_to_me?: boolean
+        is_created_by_me?: boolean
+      }
+      if (!created?.id) return
+
+      const belongsToTab =
+        filterType === "assigned"
+          ? created.is_assigned_to_me
+          : created.is_created_by_me
+      if (!belongsToTab) return
+
+      setItems((prev) => [created, ...prev])
+      setTotal((t) => t + 1)
+
+      setFacets((prevFacets) => {
+        if (!prevFacets) return prevFacets
+        const statusIndex = prevFacets.status.findIndex(
+          (s) => s.slug === created.status
+        )
+        const nextStatus = [...prevFacets.status]
+        if (statusIndex !== -1) {
+          nextStatus[statusIndex] = {
+            ...nextStatus[statusIndex],
+            count: nextStatus[statusIndex].count + 1,
+          }
+        } else {
+          nextStatus.push({
+            workflow_status_id: created.workflow_status_id,
+            project_id: created.project_id,
+            name: created.status_name,
+            slug: created.status,
+            category: created.status_category,
+            position: 999_999,
+            count: 1,
+          })
+        }
+        const nextPriority = { ...prevFacets.priority }
+        nextPriority[created.priority] =
+          (nextPriority[created.priority] ?? 0) + 1
+        return { ...prevFacets, status: nextStatus, priority: nextPriority }
+      })
+
+      const savedState = loadScrollState(filterType)
+      if (savedState) {
+        saveScrollState(filterType, {
+          ...savedState,
+          items: [created, ...savedState.items],
+          total: savedState.total + 1,
+        })
+      }
+    }
+    window.addEventListener("koro:issue-created", handler)
+    return () => window.removeEventListener("koro:issue-created", handler)
+  }, [filterType])
 
   // İlk yükleme: cache'den restore et veya API'den yükle
   React.useEffect(() => {

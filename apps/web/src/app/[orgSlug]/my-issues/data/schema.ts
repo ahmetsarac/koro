@@ -23,6 +23,8 @@ export const issueSchema = z.object({
   status_category: z.string(),
   is_blocked: z.boolean(),
   priority: z.string(),
+  assignee_id: z.string().uuid().nullable().optional(),
+  reporter_id: z.string().uuid().optional(),
 })
 
 export type Issue = z.infer<typeof issueSchema>

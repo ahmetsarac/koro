@@ -363,6 +363,51 @@ function ProjectIssuesTab({
     [orgSlug, projectKey, listScope]
   )
 
+  // Insert newly created issue into current project list without refetching
+  React.useEffect(() => {
+    const handler = (event: Event) => {
+      const created = (event as CustomEvent).detail as {
+        id: string
+        project_id: string
+        display_key: string
+        title: string
+        status: string
+        workflow_status_id: string
+        status_name: string
+        status_category: string
+        is_blocked: boolean
+        project_key: string
+      }
+      if (!created.display_key.startsWith(`${projectKey}-`)) return
+      if (listScope === "archived") return
+
+      const newItem: IssueListItem = {
+        issue_id: created.id,
+        display_key: created.display_key,
+        title: created.title,
+        status: created.status,
+        workflow_status_id: created.workflow_status_id,
+        status_name: created.status_name,
+        status_category: created.status_category,
+        is_blocked: created.is_blocked,
+      }
+
+      setItems((prev) => [newItem, ...prev])
+      setTotal((t) => t + 1)
+
+      const saved = loadIssuesScrollState(orgSlug, projectKey, listScope)
+      if (saved) {
+        saveIssuesScrollState(orgSlug, projectKey, listScope, {
+          ...saved,
+          items: [newItem, ...saved.items],
+          total: saved.total + 1,
+        })
+      }
+    }
+    window.addEventListener("koro:issue-created", handler)
+    return () => window.removeEventListener("koro:issue-created", handler)
+  }, [orgSlug, projectKey, listScope])
+
   // İlk yükleme: cache'den restore et veya API'den yükle
   React.useEffect(() => {
     hasRestoredFromCacheRef.current = false

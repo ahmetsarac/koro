@@ -284,7 +284,27 @@ export function NewIssueModal({
           }
         )
         if (res.ok) {
+          const created = (await res.json()) as {
+            id: string
+            project_id: string
+            display_key: string
+            title: string
+            status: string
+            workflow_status_id: string
+            status_name: string
+            status_category: string
+            is_blocked: boolean
+            priority: string
+            assignee_id: string | null
+            reporter_id: string | null
+            project_key: string
+            is_assigned_to_me: boolean
+            is_created_by_me: boolean
+          }
           handleOpenChange(false)
+          window.dispatchEvent(
+            new CustomEvent("koro:issue-created", { detail: created })
+          )
         }
       } finally {
         setIsSubmitting(false)

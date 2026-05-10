@@ -112,7 +112,7 @@ pub async fn create_issue(
         }
     };
 
-    let (issue_id, title) = match issues_repo::insert_issue_returning_id_title(
+    let (issue_id, _title) = match issues_repo::insert_issue_returning_id_title(
         &mut tx,
         p.org_id,
         project_id,
@@ -143,13 +143,40 @@ pub async fn create_issue(
         return StatusCode::INTERNAL_SERVER_ERROR.into_response();
     }
 
-    let display_key = format!("{}-{}", p.project_key, key_seq);
+    let full = match issues_repo::find_issue_by_id(pool, issue_id).await {
+        Ok(Some(row)) => row,
+        Ok(None) => {
+            eprintln!("create_issue: inserted issue not found after commit");
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
+        Err(e) => {
+            eprintln!("create_issue fetch full error: {e:?}");
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
+    };
+
+    let display_key = format!("{}-{}", full.project_key, full.key_seq);
+    let is_assigned_to_me = full.assignee_id.map_or(false, |aid| aid == user_id);
+    let is_created_by_me = full.reporter_id.map_or(false, |rid| rid == user_id);
+
     (
         StatusCode::CREATED,
         Json(CreateIssueResponse {
-            issue_id,
+            id: full.id,
+            project_id: full.project_id,
             display_key,
-            title,
+            title: full.title,
+            status: full.status_slug,
+            workflow_status_id: full.workflow_status_id,
+            status_name: full.status_name,
+            status_category: full.status_category,
+            is_blocked: full.is_blocked,
+            priority: full.priority,
+            assignee_id: full.assignee_id,
+            reporter_id: full.reporter_id,
+            project_key: full.project_key,
+            is_assigned_to_me,
+            is_created_by_me,
         }),
     )
         .into_response()

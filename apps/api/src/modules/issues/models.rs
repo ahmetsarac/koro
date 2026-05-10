@@ -127,9 +127,21 @@ pub struct CreateIssueRequest {
 
 #[derive(Serialize, ToSchema)]
 pub struct CreateIssueResponse {
-    pub issue_id: Uuid,
+    pub id: Uuid,
+    pub project_id: Uuid,
     pub display_key: String,
     pub title: String,
+    pub status: String,
+    pub workflow_status_id: Uuid,
+    pub status_name: String,
+    pub status_category: String,
+    pub is_blocked: bool,
+    pub priority: String,
+    pub assignee_id: Option<Uuid>,
+    pub reporter_id: Option<Uuid>,
+    pub project_key: String,
+    pub is_assigned_to_me: bool,
+    pub is_created_by_me: bool,
 }
 
 #[derive(Serialize, ToSchema, Clone)]
