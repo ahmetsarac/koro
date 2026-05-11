@@ -866,15 +866,18 @@ export function DataTable({ orgSlug, columns, filterType }: DataTableProps) {
     [orgSlug, sorting, columnFilters, filterType]
   )
 
-  // Archive ettikten sonra listeyi yenile
+  // Archive ettikten sonra o satiri listeden kaldir (refetch etme)
   React.useEffect(() => {
-    const handler = () => {
-      clearScrollState(filterType)
-      void refetchIssues()
+    const handler = (e: Event) => {
+      const id = (e as CustomEvent<{ issueId: string }>).detail?.issueId
+      if (id) {
+        setItems((prev) => prev.filter((i) => i.id !== id))
+        setTotal((t) => Math.max(0, t - 1))
+      }
     }
     window.addEventListener("koro:issue-archived", handler)
     return () => window.removeEventListener("koro:issue-archived", handler)
-  }, [filterType, refetchIssues])
+  }, [])
 
   const handleBoardMove = React.useCallback(
     async ({
@@ -1209,7 +1212,19 @@ export function DataTable({ orgSlug, columns, filterType }: DataTableProps) {
                         : "Archive failed."
                     )
                   }
-                  await refetchIssues()
+                  setItems((prev) => {
+                    const issue = prev.find((i) => i.id === issueId)
+                    if (issue) {
+                      const projectKey = issue.display_key.split("-")[0] || ""
+                      window.dispatchEvent(
+                        new CustomEvent("koro:issue-archived", {
+                          detail: { projectKey, delta: -1 },
+                        })
+                      )
+                    }
+                    return prev.filter((i) => i.id !== issueId)
+                  })
+                  setTotal((t) => Math.max(0, t - 1))
                 } catch (e) {
                   await alert({
                     title: "Error",

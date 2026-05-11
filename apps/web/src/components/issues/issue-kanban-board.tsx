@@ -630,7 +630,7 @@ function SortableBoardCard<TIssue extends KanbanIssue>({
       } ${isDragging ? "opacity-50" : ""}`}
     >
       {onArchiveIssue ? (
-        <div className="absolute right-1.5 top-1.5 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+        <div className="absolute right-1.5 top-1.5 opacity-0 group-hover:opacity-100 has-[[data-state=open]]:opacity-100 transition-opacity z-10">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button

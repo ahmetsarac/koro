@@ -12,7 +12,7 @@ export function MyIssuesTabs() {
   const orgSlug = segments[0] || ""
 
   return (
-    <Tabs value={activeTab}>
+    <Tabs value={activeTab} id="my-issues-tabs">
       <TabsList className="w-fit">
         <TabsTrigger value="assigned" asChild>
           <Link href={`/${orgSlug}/my-issues/assigned`}>Assigned to me</Link>

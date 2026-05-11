@@ -48,7 +48,12 @@ export function DataTableRowActions<TData>({
           typeof data?.message === "string" ? data.message : "Archive failed."
         )
       }
-      window.dispatchEvent(new CustomEvent("koro:issue-archived"))
+      const projectKey = issue.display_key.split("-")[0] || ""
+      window.dispatchEvent(
+        new CustomEvent("koro:issue-archived", {
+          detail: { issueId: issue.id, projectKey, delta: -1 },
+        })
+      )
     } catch (e) {
       await alert({
         title: "Error",

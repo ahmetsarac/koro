@@ -42,7 +42,7 @@ export function NavProjects({
   }, [projects])
 
   React.useEffect(() => {
-    const handler = (event: Event) => {
+    const createdHandler = (event: Event) => {
       const created = (event as CustomEvent).detail as { project_key?: string }
       if (!created.project_key) return
       setLocalProjects((prev) =>
@@ -53,8 +53,37 @@ export function NavProjects({
         )
       )
     }
-    window.addEventListener("koro:issue-created", handler)
-    return () => window.removeEventListener("koro:issue-created", handler)
+    window.addEventListener("koro:issue-created", createdHandler)
+    return () => window.removeEventListener("koro:issue-created", createdHandler)
+  }, [])
+
+  React.useEffect(() => {
+    const archiveHandler = (event: Event) => {
+      const detail = (event as CustomEvent).detail as {
+        projectKey?: string
+        delta?: number
+      }
+      if (!detail.projectKey || typeof detail.delta !== "number") return
+      const delta = detail.delta
+      setLocalProjects((prev) =>
+        prev.map((p) =>
+          p.key === detail.projectKey
+            ? {
+                ...p,
+                openIssueCount: Math.max(0, p.openIssueCount + delta),
+              }
+            : p
+        )
+      )
+    }
+    window.addEventListener("koro:issue-archived", archiveHandler)
+    window.addEventListener("koro:issue-unarchived", archiveHandler)
+    window.addEventListener("koro:issue-deleted", archiveHandler)
+    return () => {
+      window.removeEventListener("koro:issue-archived", archiveHandler)
+      window.removeEventListener("koro:issue-unarchived", archiveHandler)
+      window.removeEventListener("koro:issue-deleted", archiveHandler)
+    }
   }, [])
 
   return (

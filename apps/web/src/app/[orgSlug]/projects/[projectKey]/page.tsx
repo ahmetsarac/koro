@@ -535,6 +535,11 @@ function ProjectIssuesTab({
         projectIssuesCache.delete(
           getIssuesCacheKey(orgSlug, projectKey, "archived")
         )
+        window.dispatchEvent(
+          new CustomEvent("koro:issue-archived", {
+            detail: { projectKey, delta: -1 },
+          })
+        )
       } catch (e) {
         await alert({
           title: "Error",
@@ -579,6 +584,11 @@ function ProjectIssuesTab({
         projectIssuesCache.delete(
           getIssuesCacheKey(orgSlug, projectKey, "archived")
         )
+        window.dispatchEvent(
+          new CustomEvent("koro:issue-unarchived", {
+            detail: { projectKey, delta: 1 },
+          })
+        )
       } catch (e) {
         await alert({
           title: "Error",
@@ -618,6 +628,11 @@ function ProjectIssuesTab({
         setTotal((t) => Math.max(0, t - 1))
         projectIssuesCache.delete(
           getIssuesCacheKey(orgSlug, projectKey, "archived")
+        )
+        window.dispatchEvent(
+          new CustomEvent("koro:issue-deleted", {
+            detail: { projectKey, delta: 0 },
+          })
         )
       } catch (e) {
         await alert({

@@ -243,7 +243,18 @@ export function ProjectKanbanBoard({
                   : "Archive failed."
               )
             }
-            await fetchBoard()
+            setItemsByColumn((prev) => {
+              const next: Record<string, IssueListItem[]> = {}
+              for (const [colId, issues] of Object.entries(prev)) {
+                next[colId] = issues.filter((i) => i.issue_id !== issueId)
+              }
+              return next
+            })
+            window.dispatchEvent(
+              new CustomEvent("koro:issue-archived", {
+                detail: { projectKey, delta: -1 },
+              })
+            )
           } catch (e) {
             await alert({
               title: "Error",

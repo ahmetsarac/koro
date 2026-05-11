@@ -27,6 +27,9 @@ import {
   ArrowRight,
   Link2,
   Search,
+  MoreHorizontal,
+  Archive,
+  ArchiveRestore,
 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
@@ -50,6 +53,10 @@ import { DescriptionEditor } from "@/components/issues/description-editor"
 import { RecordProjectView } from "@/components/record-project-view"
 import { cn } from "@/lib/utils"
 import { issueDetailHrefPreserveSource } from "@/lib/issue-nav"
+import {
+  useConfirmDialog,
+  useAlertDialog,
+} from "@/components/ui/confirm-dialog"
 
 interface Issue {
   issue_id: string
@@ -67,6 +74,7 @@ interface Issue {
   project_id: string
   created_at: string
   updated_at: string
+  archived_at: string | null
 }
 
 interface ProjectMember {
@@ -315,6 +323,8 @@ function IssueDetailPage({
   const { orgSlug, issueKey } = use(params)
   const router = useRouter()
   const searchParams = useSearchParams()
+  const { confirm, dialog: confirmDialog } = useConfirmDialog()
+  const { alert, dialog: alertDialog } = useAlertDialog()
   const [issue, setIssue] = React.useState<Issue | null>(null)
   const [isLoading, setIsLoading] = React.useState(true)
   const [error, setError] = React.useState<string | null>(null)
@@ -675,6 +685,88 @@ function IssueDetailPage({
     }
   }
 
+  const handleArchive = async () => {
+    if (!issue) return
+    const ok = await confirm({
+      title: "Archive Issue",
+      description: `Are you sure you want to archive ${issue.display_key}?`,
+      confirmLabel: "Archive",
+    })
+    if (!ok) return
+    try {
+      const res = await fetch("/api/my-issues/bulk", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify({ archive: { issue_ids: [issue.issue_id] } }),
+      })
+      if (!res.ok) {
+        const data = (await res.json().catch(() => ({}))) as {
+          message?: string
+        }
+        throw new Error(
+          typeof data?.message === "string" ? data.message : "Archive failed."
+        )
+      }
+      const updated = await fetchIssue(orgSlug, issueKey, { cacheBust: true })
+      setIssue(updated)
+      const pk = projectKeyFromDisplayKey(issue.display_key)
+      window.dispatchEvent(
+        new CustomEvent("koro:issue-archived", {
+          detail: { projectKey: pk, delta: -1 },
+        })
+      )
+    } catch (e) {
+      await alert({
+        title: "Error",
+        description:
+          e instanceof Error ? e.message : "Could not archive issue.",
+      })
+    }
+  }
+
+  const handleUnarchive = async () => {
+    if (!issue) return
+    const ok = await confirm({
+      title: "Unarchive Issue",
+      description: `Are you sure you want to unarchive ${issue.display_key}?`,
+      confirmLabel: "Unarchive",
+    })
+    if (!ok) return
+    try {
+      const res = await fetch("/api/my-issues/bulk", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify({ unarchive: { issue_ids: [issue.issue_id] } }),
+      })
+      if (!res.ok) {
+        const data = (await res.json().catch(() => ({}))) as {
+          message?: string
+        }
+        throw new Error(
+          typeof data?.message === "string"
+            ? data.message
+            : "Unarchive failed."
+        )
+      }
+      const updated = await fetchIssue(orgSlug, issueKey, { cacheBust: true })
+      setIssue(updated)
+      const pk = projectKeyFromDisplayKey(issue.display_key)
+      window.dispatchEvent(
+        new CustomEvent("koro:issue-unarchived", {
+          detail: { projectKey: pk, delta: 1 },
+        })
+      )
+    } catch (e) {
+      await alert({
+        title: "Error",
+        description:
+          e instanceof Error ? e.message : "Could not unarchive issue.",
+      })
+    }
+  }
+
   const loadProjectMembers = async () => {
     if (!issue || projectMembers.length > 0 || isLoadingMembers) return
     setIsLoadingMembers(true)
@@ -743,6 +835,9 @@ function IssueDetailPage({
   })
 
   return (
+    <>
+      {confirmDialog}
+      {alertDialog}
     <div className="flex h-[calc(100svh-4.5rem)] min-w-0 flex-col gap-6">
       <RecordProjectView orgSlug={orgSlug} projectKey={projectKey} />
       <div className="flex min-w-0 items-center gap-3">
@@ -756,6 +851,12 @@ function IssueDetailPage({
           {issue.display_key}
         </Link>
       </div>
+
+      {issue.archived_at ? (
+        <div className="rounded-md bg-muted px-3 py-2 text-xs text-muted-foreground">
+          This issue is archived.
+        </div>
+      ) : null}
 
       <div className="min-w-0 flex-1 overflow-y-auto">
         {isEditingTitle ? (
@@ -1116,6 +1217,38 @@ function IssueDetailPage({
               )}
             </DropdownMenuContent>
           </DropdownMenu>
+
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7"
+              >
+                <MoreHorizontal className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-44">
+              {issue.archived_at ? (
+                <DropdownMenuItem
+                  onClick={() => void handleUnarchive()}
+                  className="gap-2"
+                >
+                  <ArchiveRestore className="h-4 w-4" />
+                  Unarchive
+                </DropdownMenuItem>
+              ) : (
+                <DropdownMenuItem
+                  onClick={() => void handleArchive()}
+                  className="gap-2"
+                >
+                  <Archive className="h-4 w-4" />
+                  Archive
+                </DropdownMenuItem>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
 
         <div className="mb-8 flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-muted-foreground">
@@ -1288,6 +1421,7 @@ function IssueDetailPage({
         </div>
       </div>
     </div>
+    </>
   )
 }
 
