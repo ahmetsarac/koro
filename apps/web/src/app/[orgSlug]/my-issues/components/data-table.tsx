@@ -37,6 +37,10 @@ import { DataTableSelectionOverlay } from "./data-table-selection-overlay"
 import { MY_ISSUES_VIEW_COOKIE } from "../constants"
 import { RotateCw } from "lucide-react"
 import {
+  useConfirmDialog,
+  useAlertDialog,
+} from "@/components/ui/confirm-dialog"
+import {
   myIssuesCache,
   MY_ISSUES_VIEW_STORAGE_KEY,
   type MyIssuesScrollState,
@@ -185,6 +189,8 @@ interface DataTableProps {
 export function DataTable({ orgSlug, columns, filterType }: DataTableProps) {
   const newIssueModal = useNewIssueModal()
   const initialView = useMyIssuesInitialView()
+  const { confirm, dialog: confirmDialog } = useConfirmDialog()
+  const { alert, dialog: alertDialog } = useAlertDialog()
   const [items, setItems] = React.useState<Issue[]>([])
   const [nextCursor, setNextCursor] = React.useState<string | null>(null)
   const [total, setTotal] = React.useState(0)
@@ -860,6 +866,16 @@ export function DataTable({ orgSlug, columns, filterType }: DataTableProps) {
     [orgSlug, sorting, columnFilters, filterType]
   )
 
+  // Archive ettikten sonra listeyi yenile
+  React.useEffect(() => {
+    const handler = () => {
+      clearScrollState(filterType)
+      void refetchIssues()
+    }
+    window.addEventListener("koro:issue-archived", handler)
+    return () => window.removeEventListener("koro:issue-archived", handler)
+  }, [filterType, refetchIssues])
+
   const handleBoardMove = React.useCallback(
     async ({
       issue,
@@ -957,8 +973,11 @@ export function DataTable({ orgSlug, columns, filterType }: DataTableProps) {
   )
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-4">
-      <DataTableToolbar
+    <>
+      {confirmDialog}
+      {alertDialog}
+      <div className="flex min-h-0 flex-1 flex-col gap-4">
+        <DataTableToolbar
         table={table}
         facets={facets}
         view={view}
@@ -1166,6 +1185,39 @@ export function DataTable({ orgSlug, columns, filterType }: DataTableProps) {
               }
               onReload={refetchIssues}
               onAddIssue={(columnId) => newIssueModal?.openNewIssueModal(columnId)}
+              onArchiveIssue={async (issueId) => {
+                const ok = await confirm({
+                  title: "Archive Issue",
+                  description: "Are you sure you want to archive this issue?",
+                  confirmLabel: "Archive",
+                })
+                if (!ok) return
+                try {
+                  const res = await fetch("/api/my-issues/bulk", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    credentials: "same-origin",
+                    body: JSON.stringify({ archive: { issue_ids: [issueId] } }),
+                  })
+                  if (!res.ok) {
+                    const data = (await res.json().catch(() => ({}))) as {
+                      message?: string
+                    }
+                    throw new Error(
+                      typeof data?.message === "string"
+                        ? data.message
+                        : "Archive failed."
+                    )
+                  }
+                  await refetchIssues()
+                } catch (e) {
+                  await alert({
+                    title: "Error",
+                    description:
+                      e instanceof Error ? e.message : "Could not archive issue.",
+                  })
+                }
+              }}
             />
           </div>
         )}
@@ -1184,6 +1236,7 @@ export function DataTable({ orgSlug, columns, filterType }: DataTableProps) {
         )}
       </div>
     </div>
+    </>
   )
 }
 

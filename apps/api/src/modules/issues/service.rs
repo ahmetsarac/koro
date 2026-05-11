@@ -333,12 +333,13 @@ pub async fn bulk_my_issues(
     req: BulkMyIssuesRequest,
 ) -> impl IntoResponse + use<> {
     let n_ops = req.archive.is_some() as u8
+        + req.unarchive.is_some() as u8
         + req.set_status.is_some() as u8
         + req.set_priority.is_some() as u8;
     if n_ops != 1 {
         return (
             StatusCode::BAD_REQUEST,
-            "specify exactly one of archive, set_status, set_priority",
+            "specify exactly one of archive, unarchive, set_status, set_priority",
         )
             .into_response();
     }
@@ -366,6 +367,39 @@ pub async fn bulk_my_issues(
             Ok(n) => n,
             Err(e) => {
                 eprintln!("bulk_my_issues archive error: {e:?}");
+                return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+            }
+        };
+        return (
+            StatusCode::OK,
+            Json(BulkMyIssuesResponse { updated: n as i64 }),
+        )
+            .into_response();
+    }
+
+    if let Some(unarch) = req.unarchive {
+        let ids: Vec<uuid::Uuid> = unarch.issue_ids.into_iter().collect::<HashSet<_>>().into_iter().collect();
+        if ids.is_empty() {
+            return (StatusCode::BAD_REQUEST, "issue_ids required").into_response();
+        }
+        let eligible = match issues_repo::count_issues_eligible_for_unarchive(pool, user_id, &ids).await {
+            Ok(n) => n,
+            Err(e) => {
+                eprintln!("bulk_my_issues unarchive eligible error: {e:?}");
+                return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+            }
+        };
+        if eligible != ids.len() as i64 {
+            return (
+                StatusCode::BAD_REQUEST,
+                "invalid issue id, not archived, or not permitted",
+            )
+                .into_response();
+        }
+        let n = match issues_repo::unarchive_issues_for_member(pool, user_id, &ids).await {
+            Ok(n) => n,
+            Err(e) => {
+                eprintln!("bulk_my_issues unarchive error: {e:?}");
                 return StatusCode::INTERNAL_SERVER_ERROR.into_response();
             }
         };

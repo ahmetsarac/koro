@@ -208,6 +208,34 @@ pub async fn get_issue_archived_state(
     .await
 }
 
+/// Returns how many rows matched `issue_ids` and were unarchived (archived + project member).
+pub async fn unarchive_issues_for_member(
+    pool: &PgPool,
+    user_id: Uuid,
+    issue_ids: &[Uuid],
+) -> Result<u64, sqlx::Error> {
+    if issue_ids.is_empty() {
+        return Ok(0);
+    }
+    let res = sqlx::query(
+        r#"
+        UPDATE issues i
+        SET archived_at = NULL, updated_at = NOW()
+        WHERE i.id = ANY($1)
+          AND i.archived_at IS NOT NULL
+          AND EXISTS (
+            SELECT 1 FROM project_members pm
+            WHERE pm.project_id = i.project_id AND pm.user_id = $2
+          )
+        "#,
+    )
+    .bind(issue_ids)
+    .bind(user_id)
+    .execute(pool)
+    .await?;
+    Ok(res.rows_affected())
+}
+
 /// Returns how many rows matched `issue_ids` and were archived (active + project member).
 pub async fn archive_issues_for_member(
     pool: &PgPool,
@@ -234,6 +262,34 @@ pub async fn archive_issues_for_member(
     .execute(pool)
     .await?;
     Ok(res.rows_affected())
+}
+
+/// Expected count: issues that exist, are archived, and user is a project member.
+pub async fn count_issues_eligible_for_unarchive(
+    pool: &PgPool,
+    user_id: Uuid,
+    issue_ids: &[Uuid],
+) -> Result<i64, sqlx::Error> {
+    if issue_ids.is_empty() {
+        return Ok(0);
+    }
+    let c: i64 = sqlx::query_scalar(
+        r#"
+        SELECT COUNT(*)::bigint
+        FROM issues i
+        WHERE i.id = ANY($1)
+          AND i.archived_at IS NOT NULL
+          AND EXISTS (
+            SELECT 1 FROM project_members pm
+            WHERE pm.project_id = i.project_id AND pm.user_id = $2
+          )
+        "#,
+    )
+    .bind(issue_ids)
+    .bind(user_id)
+    .fetch_one(pool)
+    .await?;
+    Ok(c)
 }
 
 /// Expected count: issues that exist, are active, and user is a project member.

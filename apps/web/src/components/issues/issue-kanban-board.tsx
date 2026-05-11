@@ -80,6 +80,8 @@ interface IssueKanbanBoardProps<TIssue extends KanbanIssue> {
   canIssueEnterColumn?: (issue: TIssue, columnId: string) => boolean
   /** My Issues board: column header menu to hide a column. */
   onHideColumn?: (columnId: string) => void
+  /** When set, each card shows an archive option in its dropdown menu. */
+  onArchiveIssue?: (issueId: string) => void | Promise<void>
 }
 
 function normalizeColumns<TIssue extends KanbanIssue>(
@@ -122,6 +124,7 @@ export function IssueKanbanBoard<TIssue extends KanbanIssue>({
   getIssueProjectId,
   canIssueEnterColumn,
   onHideColumn,
+  onArchiveIssue,
 }: IssueKanbanBoardProps<TIssue>) {
   const normalizedColumns = React.useMemo(
     () => normalizeColumns(columns, itemsByColumn),
@@ -415,6 +418,7 @@ export function IssueKanbanBoard<TIssue extends KanbanIssue>({
               onAddIssue={onAddIssue}
               isInteractive={isInteractive}
               onHideColumn={onHideColumn}
+              onArchiveIssue={onArchiveIssue}
             />
           ))}
         </div>
@@ -453,6 +457,7 @@ interface BoardColumnProps<TIssue extends KanbanIssue> {
   onAddIssue?: (columnId: string) => void
   isInteractive: boolean
   onHideColumn?: (columnId: string) => void
+  onArchiveIssue?: (issueId: string) => void | Promise<void>
 }
 
 function BoardColumn<TIssue extends KanbanIssue>({
@@ -472,6 +477,7 @@ function BoardColumn<TIssue extends KanbanIssue>({
   onAddIssue,
   isInteractive,
   onHideColumn,
+  onArchiveIssue,
 }: BoardColumnProps<TIssue>) {
   const issueIds = React.useMemo(() => issues.map(getIssueId), [issues, getIssueId])
   const dropDisabled = Boolean(
@@ -551,6 +557,7 @@ function BoardColumn<TIssue extends KanbanIssue>({
               getIssueTitle={getIssueTitle}
               getIssueHref={getIssueHref}
               isInteractive={isInteractive}
+              onArchiveIssue={onArchiveIssue}
             />
           ))}
 
@@ -582,6 +589,7 @@ interface SortableBoardCardProps<TIssue extends KanbanIssue> {
   getIssueTitle: (issue: TIssue) => string
   getIssueHref?: (issue: TIssue) => string
   isInteractive: boolean
+  onArchiveIssue?: (issueId: string) => void | Promise<void>
 }
 
 function SortableBoardCard<TIssue extends KanbanIssue>({
@@ -591,6 +599,7 @@ function SortableBoardCard<TIssue extends KanbanIssue>({
   getIssueTitle,
   getIssueHref,
   isInteractive,
+  onArchiveIssue,
 }: SortableBoardCardProps<TIssue>) {
   const {
     attributes,
@@ -610,56 +619,89 @@ function SortableBoardCard<TIssue extends KanbanIssue>({
   }
 
   const href = getIssueHref?.(issue)
+  const issueId = getIssueId(issue)
 
   return (
     <div
       ref={setNodeRef}
       style={style}
-      {...(isInteractive ? listeners : {})}
-      {...(isInteractive ? attributes : {})}
-      className={`rounded-md border bg-background p-3 shadow-sm transition-opacity ${
+      className={`group relative rounded-md border bg-background p-3 shadow-sm transition-opacity ${
         isInteractive ? "cursor-grab active:cursor-grabbing" : ""
       } ${isDragging ? "opacity-50" : ""}`}
     >
-      {href ? (
-        <Link
-          href={href}
-          className="block space-y-1"
-          onClick={(event) => {
-            if (isDragging) {
-              event.preventDefault()
-            }
-          }}
-        >
-          <span className="font-mono text-xs text-muted-foreground">
-            {getIssueKey(issue)}
-          </span>
-          <p className="line-clamp-2 text-xs font-medium leading-tight">
-            {getIssueTitle(issue)}
-          </p>
-          {issue.is_blocked ? (
-            <span className="mt-1 inline-flex items-center gap-1 rounded bg-destructive/10 px-1.5 py-0.5 text-[10px] font-medium text-destructive">
-              <Ban className="h-3 w-3" />
-              Blocked
-            </span>
-          ) : null}
-        </Link>
-      ) : (
-        <div className="space-y-1">
-          <span className="font-mono text-xs text-muted-foreground">
-            {getIssueKey(issue)}
-          </span>
-          <p className="line-clamp-2 text-xs font-medium leading-tight">
-            {getIssueTitle(issue)}
-          </p>
-          {issue.is_blocked ? (
-            <span className="mt-1 inline-flex items-center gap-1 rounded bg-destructive/10 px-1.5 py-0.5 text-[10px] font-medium text-destructive">
-              <Ban className="h-3 w-3" />
-              Blocked
-            </span>
-          ) : null}
+      {onArchiveIssue ? (
+        <div className="absolute right-1.5 top-1.5 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6"
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <MoreHorizontal className="h-3.5 w-3.5" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-36">
+              <DropdownMenuItem
+                className="text-xs"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  void onArchiveIssue(issueId)
+                }}
+              >
+                Archive
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
-      )}
+      ) : null}
+      <div
+        {...(isInteractive ? listeners : {})}
+        {...(isInteractive ? attributes : {})}
+      >
+        {href ? (
+          <Link
+            href={href}
+            className="block space-y-1"
+            onClick={(event) => {
+              if (isDragging) {
+                event.preventDefault()
+              }
+            }}
+          >
+            <span className="font-mono text-xs text-muted-foreground">
+              {getIssueKey(issue)}
+            </span>
+            <p className="line-clamp-2 text-xs font-medium leading-tight">
+              {getIssueTitle(issue)}
+            </p>
+            {issue.is_blocked ? (
+              <span className="mt-1 inline-flex items-center gap-1 rounded bg-destructive/10 px-1.5 py-0.5 text-[10px] font-medium text-destructive">
+                <Ban className="h-3 w-3" />
+                Blocked
+              </span>
+            ) : null}
+          </Link>
+        ) : (
+          <div className="space-y-1">
+            <span className="font-mono text-xs text-muted-foreground">
+              {getIssueKey(issue)}
+            </span>
+            <p className="line-clamp-2 text-xs font-medium leading-tight">
+              {getIssueTitle(issue)}
+            </p>
+            {issue.is_blocked ? (
+              <span className="mt-1 inline-flex items-center gap-1 rounded bg-destructive/10 px-1.5 py-0.5 text-[10px] font-medium text-destructive">
+                <Ban className="h-3 w-3" />
+                Blocked
+              </span>
+            ) : null}
+          </div>
+        )}
+      </div>
     </div>
   )
 }

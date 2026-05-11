@@ -260,6 +260,11 @@ pub struct BulkArchiveIssues {
 }
 
 #[derive(Deserialize, ToSchema)]
+pub struct BulkUnarchiveIssues {
+    pub issue_ids: Vec<Uuid>,
+}
+
+#[derive(Deserialize, ToSchema)]
 pub struct BulkSetIssueStatus {
     pub issue_ids: Vec<Uuid>,
     /// When all selected issues belong to one project, you may send this UUID.
@@ -277,6 +282,7 @@ pub struct BulkSetIssuePriority {
 #[derive(Deserialize, ToSchema)]
 pub struct BulkMyIssuesRequest {
     pub archive: Option<BulkArchiveIssues>,
+    pub unarchive: Option<BulkUnarchiveIssues>,
     pub set_status: Option<BulkSetIssueStatus>,
     pub set_priority: Option<BulkSetIssuePriority>,
 }

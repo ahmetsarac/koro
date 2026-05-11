@@ -12,6 +12,10 @@ import {
 
 import { IssueKanbanBoard } from "@/components/issues/issue-kanban-board"
 import { issueDetailHref } from "@/lib/issue-nav"
+import {
+  useConfirmDialog,
+  useAlertDialog,
+} from "@/components/ui/confirm-dialog"
 
 interface IssueListItem {
   issue_id: string
@@ -66,6 +70,8 @@ export function ProjectKanbanBoard({
   projectId?: string
   onAddIssue?: (columnId: string) => void
 }) {
+  const { confirm, dialog: confirmDialog } = useConfirmDialog()
+  const { alert, dialog: alertDialog } = useAlertDialog()
   const [columnDefinitions, setColumnDefinitions] = React.useState<
     BoardColumnDef[]
   >([])
@@ -189,8 +195,11 @@ export function ProjectKanbanBoard({
   )
 
   return (
-    <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-      <IssueKanbanBoard
+    <>
+      {confirmDialog}
+      {alertDialog}
+      <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+        <IssueKanbanBoard
         columns={boardColumns}
         itemsByColumn={itemsByColumn}
         isLoading={isLoading}
@@ -210,7 +219,41 @@ export function ProjectKanbanBoard({
         }
         onReload={fetchBoard}
         onAddIssue={onAddIssue}
+        onArchiveIssue={async (issueId) => {
+          const ok = await confirm({
+            title: "Archive Issue",
+            description: "Are you sure you want to archive this issue?",
+            confirmLabel: "Archive",
+          })
+          if (!ok) return
+          try {
+            const res = await fetch("/api/my-issues/bulk", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              credentials: "same-origin",
+              body: JSON.stringify({ archive: { issue_ids: [issueId] } }),
+            })
+            if (!res.ok) {
+              const data = (await res.json().catch(() => ({}))) as {
+                message?: string
+              }
+              throw new Error(
+                typeof data?.message === "string"
+                  ? data.message
+                  : "Archive failed."
+              )
+            }
+            await fetchBoard()
+          } catch (e) {
+            await alert({
+              title: "Error",
+              description:
+                e instanceof Error ? e.message : "Could not archive issue.",
+            })
+          }
+        }}
       />
     </div>
+    </>
   )
 }

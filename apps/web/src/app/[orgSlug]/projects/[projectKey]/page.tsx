@@ -21,6 +21,10 @@ import {
 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
+import {
+  useConfirmDialog,
+  useAlertDialog,
+} from "@/components/ui/confirm-dialog"
 import { NewIssueModal } from "@/components/issues/new-issue-modal"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { projectRoles } from "@/app/[orgSlug]/projects/data/data"
@@ -325,6 +329,8 @@ function ProjectIssuesTab({
   orgSlug: string
   projectKey: string
 }) {
+  const { confirm, dialog: confirmDialog } = useConfirmDialog()
+  const { alert, dialog: alertDialog } = useAlertDialog()
   const [listScope, setListScope] = React.useState<"active" | "archived">(
     "active"
   )
@@ -496,15 +502,103 @@ function ProjectIssuesTab({
     isInitialLoading,
   ])
 
+  const archiveIssue = React.useCallback(
+    async (issueId: string, displayKey: string) => {
+      const ok = await confirm({
+        title: "Archive Issue",
+        description: `Are you sure you want to archive ${displayKey}?`,
+        confirmLabel: "Archive",
+      })
+      if (!ok) return
+      try {
+        const res = await fetch("/api/my-issues/bulk", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "same-origin",
+          body: JSON.stringify({ archive: { issue_ids: [issueId] } }),
+        })
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({})) as {
+            message?: string
+          }
+          throw new Error(
+            typeof data?.message === "string"
+              ? data.message
+              : "Archive failed."
+          )
+        }
+        setItems((prev) => prev.filter((i) => i.display_key !== displayKey))
+        setTotal((t) => Math.max(0, t - 1))
+        projectIssuesCache.delete(
+          getIssuesCacheKey(orgSlug, projectKey, "active")
+        )
+        projectIssuesCache.delete(
+          getIssuesCacheKey(orgSlug, projectKey, "archived")
+        )
+      } catch (e) {
+        await alert({
+          title: "Error",
+          description:
+            e instanceof Error ? e.message : "Could not archive issue.",
+        })
+      }
+    },
+    [orgSlug, projectKey, confirm, alert]
+  )
+
+  const unarchiveIssue = React.useCallback(
+    async (issueId: string, displayKey: string) => {
+      const ok = await confirm({
+        title: "Unarchive Issue",
+        description: `Are you sure you want to unarchive ${displayKey}?`,
+        confirmLabel: "Unarchive",
+      })
+      if (!ok) return
+      try {
+        const res = await fetch("/api/my-issues/bulk", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "same-origin",
+          body: JSON.stringify({ unarchive: { issue_ids: [issueId] } }),
+        })
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({})) as {
+            message?: string
+          }
+          throw new Error(
+            typeof data?.message === "string"
+              ? data.message
+              : "Unarchive failed."
+          )
+        }
+        setItems((prev) => prev.filter((i) => i.display_key !== displayKey))
+        setTotal((t) => Math.max(0, t - 1))
+        projectIssuesCache.delete(
+          getIssuesCacheKey(orgSlug, projectKey, "active")
+        )
+        projectIssuesCache.delete(
+          getIssuesCacheKey(orgSlug, projectKey, "archived")
+        )
+      } catch (e) {
+        await alert({
+          title: "Error",
+          description:
+            e instanceof Error ? e.message : "Could not unarchive issue.",
+        })
+      }
+    },
+    [orgSlug, projectKey, confirm, alert]
+  )
+
   const deleteArchivedIssue = React.useCallback(
     async (displayKey: string) => {
-      if (
-        !window.confirm(
-          `Permanently delete ${displayKey}? This cannot be undone.`
-        )
-      ) {
-        return
-      }
+      const ok = await confirm({
+        title: "Delete Issue",
+        description: `Permanently delete ${displayKey}? This cannot be undone.`,
+        confirmLabel: "Delete",
+        confirmVariant: "destructive",
+      })
+      if (!ok) return
       try {
         const res = await fetch(
           `/api/orgs/${orgSlug}/issues/${encodeURIComponent(displayKey)}`,
@@ -526,12 +620,14 @@ function ProjectIssuesTab({
           getIssuesCacheKey(orgSlug, projectKey, "archived")
         )
       } catch (e) {
-        window.alert(
-          e instanceof Error ? e.message : "Could not delete issue."
-        )
+        await alert({
+          title: "Error",
+          description:
+            e instanceof Error ? e.message : "Could not delete issue.",
+        })
       }
     },
-    [orgSlug, projectKey]
+    [orgSlug, projectKey, confirm, alert]
   )
 
   const loadMore = React.useCallback(async () => {
@@ -614,9 +710,7 @@ function ProjectIssuesTab({
       <col style={{ width: COL_WIDTHS.key }} />
       <col />
       <col style={{ width: COL_WIDTHS.status }} />
-      {listScope === "archived" ? (
-        <col style={{ width: COL_WIDTHS.actions }} />
-      ) : null}
+      <col style={{ width: COL_WIDTHS.actions }} />
     </colgroup>
   )
 
@@ -680,8 +774,11 @@ function ProjectIssuesTab({
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-4">
-      <div className="flex gap-2 shrink-0">
+    <>
+      {confirmDialog}
+      {alertDialog}
+      <div className="flex min-h-0 flex-1 flex-col gap-4">
+        <div className="flex gap-2 shrink-0">
         <Button
           type="button"
           size="sm"
@@ -717,11 +814,9 @@ function ProjectIssuesTab({
                 <TableHead className="bg-background shadow-[inset_0_-1px_0_0_var(--border)]">
                   Status
                 </TableHead>
-                {listScope === "archived" ? (
-                  <TableHead className="bg-background shadow-[inset_0_-1px_0_0_var(--border)] text-right">
-                    Actions
-                  </TableHead>
-                ) : null}
+                <TableHead className="bg-background shadow-[inset_0_-1px_0_0_var(--border)] text-right">
+                  Actions
+                </TableHead>
               </TableRow>
             </TableHeader>
           </table>
@@ -741,7 +836,7 @@ function ProjectIssuesTab({
                 {topSpacerHeight > 0 && (
                   <TableRow aria-hidden="true" className="hover:bg-transparent">
                     <TableCell
-                      colSpan={listScope === "archived" ? 4 : 3}
+                      colSpan={4}
                       className="p-0"
                       style={{ height: topSpacerHeight }}
                     />
@@ -794,21 +889,46 @@ function ProjectIssuesTab({
                           ) : null}
                         </div>
                       </TableCell>
-                      {listScope === "archived" ? (
-                        <TableCell className="text-right">
+                      <TableCell className="text-right">
+                        {listScope === "archived" ? (
+                          <div className="flex items-center justify-end gap-2">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="h-7 text-[10px]"
+                              onClick={() => {
+                                void unarchiveIssue(issue.issue_id, issue.display_key)
+                              }}
+                            >
+                              Unarchive
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="destructive"
+                              size="sm"
+                              className="h-7 text-[10px]"
+                              onClick={() => {
+                                void deleteArchivedIssue(issue.display_key)
+                              }}
+                            >
+                              Delete
+                            </Button>
+                          </div>
+                        ) : (
                           <Button
                             type="button"
-                            variant="destructive"
+                            variant="outline"
                             size="sm"
                             className="h-7 text-[10px]"
                             onClick={() => {
-                              void deleteArchivedIssue(issue.display_key)
+                              void archiveIssue(issue.issue_id, issue.display_key)
                             }}
                           >
-                            Delete
+                            Archive
                           </Button>
-                        </TableCell>
-                      ) : null}
+                        )}
+                      </TableCell>
                     </TableRow>
                   )
                 })}
@@ -816,7 +936,7 @@ function ProjectIssuesTab({
                 {bottomSpacerHeight > 0 && (
                   <TableRow aria-hidden="true" className="hover:bg-transparent">
                     <TableCell
-                      colSpan={listScope === "archived" ? 4 : 3}
+                      colSpan={4}
                       className="p-0"
                       style={{ height: bottomSpacerHeight }}
                     />
@@ -839,6 +959,7 @@ function ProjectIssuesTab({
         )}
       </div>
     </div>
+    </>
   )
 }
 
